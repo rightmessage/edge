@@ -1,0 +1,309 @@
+{
+  "version": 1,
+  "teamPid": "demo-team",
+  "connectionScope": "conn-a",
+  "queryNames": [
+    "biz"
+  ],
+  "dimensions": [
+    {
+      "id": "business-type",
+      "isMultiWinning": false,
+      "segments": [
+        {
+          "id": "saas"
+        },
+        {
+          "id": "ecommerce"
+        },
+        {
+          "id": "creator"
+        }
+      ],
+      "signals": [
+        {
+          "indicates": "saas",
+          "weight": "strong",
+          "definition": {
+            "or": [
+              {
+                "and": [
+                  {
+                    "$managedBy": "sync",
+                    "$source": "bento",
+                    "$type": "customField",
+                    "customFieldId": "sanitized_business_type",
+                    "operator": "equals",
+                    "value": "saas_software",
+                    "edge": {
+                      "supported": false,
+                      "reason": "integration-signal",
+                      "key": "Saas0001"
+                    }
+                  }
+                ]
+              },
+              {
+                "and": [
+                  {
+                    "$source": "query",
+                    "$type": "custom",
+                    "occurrence": "last touch",
+                    "operator": "equals",
+                    "query": "biz",
+                    "value": "saas",
+                    "edge": {
+                      "supported": true,
+                      "reason": null
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "edge": {
+            "supported": false,
+            "reason": "browser-signal"
+          }
+        },
+        {
+          "indicates": "ecommerce",
+          "weight": "strong",
+          "definition": {
+            "or": [
+              {
+                "and": [
+                  {
+                    "$managedBy": "sync",
+                    "$source": "bento",
+                    "$type": "customField",
+                    "customFieldId": "sanitized_business_type",
+                    "operator": "equals",
+                    "value": "ecommerce_dtc",
+                    "edge": {
+                      "supported": false,
+                      "reason": "integration-signal",
+                      "key": "Ecom0001"
+                    }
+                  }
+                ]
+              },
+              {
+                "and": [
+                  {
+                    "$source": "query",
+                    "$type": "custom",
+                    "occurrence": "last touch",
+                    "operator": "equals",
+                    "query": "biz",
+                    "value": "ecommerce",
+                    "edge": {
+                      "supported": true,
+                      "reason": null
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "edge": {
+            "supported": false,
+            "reason": "browser-signal"
+          }
+        },
+        {
+          "indicates": "creator",
+          "weight": "strong",
+          "definition": {
+            "or": [
+              {
+                "and": [
+                  {
+                    "$managedBy": "sync",
+                    "$source": "bento",
+                    "$type": "customField",
+                    "customFieldId": "sanitized_business_type",
+                    "operator": "equals",
+                    "value": "online_education",
+                    "edge": {
+                      "supported": false,
+                      "reason": "integration-signal",
+                      "key": "Educ0001"
+                    }
+                  }
+                ]
+              },
+              {
+                "and": [
+                  {
+                    "$source": "query",
+                    "$type": "custom",
+                    "occurrence": "last touch",
+                    "operator": "equals",
+                    "query": "biz",
+                    "value": "creator",
+                    "edge": {
+                      "supported": true,
+                      "reason": null
+                    }
+                  }
+                ]
+              },
+              {
+                "and": [
+                  {
+                    "$source": "referrer",
+                    "$type": "domain",
+                    "domain": "smartpassiveincome.com",
+                    "edge": {
+                      "supported": true,
+                      "reason": null
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "edge": {
+            "supported": false,
+            "reason": "browser-signal"
+          }
+        }
+      ]
+    }
+  ],
+  "campaigns": [
+    {
+      "id": "campaign_saas",
+      "is_active": true,
+      "variants": [
+        {
+          "id": "variant_saas",
+          "rules": {
+            "all": [
+              {
+                "dimensionId": "business-type",
+                "segment": "saas"
+              }
+            ]
+          },
+          "actions": [
+            {
+              "id": "action_saas",
+              "actionId": "action_saas",
+              "campaignId": "campaign_saas",
+              "variantId": "variant_saas",
+              "$type": "MODIFY_ELEMENT",
+              "selector": "h1",
+              "page": [
+                {
+                  "domain": "*",
+                  "path": "/*"
+                }
+              ],
+              "modifications": {
+                "text": "SaaS"
+              },
+              "edge": {
+                "supported": true,
+                "reason": null,
+                "operations": [
+                  "text"
+                ],
+                "deferredOperations": []
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "campaign_ecommerce",
+      "is_active": true,
+      "variants": [
+        {
+          "id": "variant_ecommerce",
+          "rules": {
+            "all": [
+              {
+                "dimensionId": "business-type",
+                "segment": "ecommerce"
+              }
+            ]
+          },
+          "actions": [
+            {
+              "id": "action_ecommerce",
+              "actionId": "action_ecommerce",
+              "campaignId": "campaign_ecommerce",
+              "variantId": "variant_ecommerce",
+              "$type": "MODIFY_ELEMENT",
+              "selector": "h1",
+              "page": [
+                {
+                  "domain": "*",
+                  "path": "/*"
+                }
+              ],
+              "modifications": {
+                "text": "Ecommerce"
+              },
+              "edge": {
+                "supported": true,
+                "reason": null,
+                "operations": [
+                  "text"
+                ],
+                "deferredOperations": []
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "campaign_creator",
+      "is_active": true,
+      "variants": [
+        {
+          "id": "variant_creator",
+          "rules": {
+            "all": [
+              {
+                "dimensionId": "business-type",
+                "segment": "creator"
+              }
+            ]
+          },
+          "actions": [
+            {
+              "id": "action_creator",
+              "actionId": "action_creator",
+              "campaignId": "campaign_creator",
+              "variantId": "variant_creator",
+              "$type": "MODIFY_ELEMENT",
+              "selector": "h1",
+              "page": [
+                {
+                  "domain": "*",
+                  "path": "/*"
+                }
+              ],
+              "modifications": {
+                "text": "Creator"
+              },
+              "edge": {
+                "supported": true,
+                "reason": null,
+                "operations": [
+                  "text"
+                ],
+                "deferredOperations": []
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

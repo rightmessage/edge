@@ -1,0 +1,15 @@
+name: Bug report
+description: Report incorrect personalization or a fail-open problem
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include package/runtime versions, synthetic plan, request, expected and actual results. Remove cookies, contact details and secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Include the x-rm-edge header and sanitized logs.

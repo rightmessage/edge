@@ -1,0 +1,375 @@
+{
+  "version": 1,
+  "description": "Portable cookie and evaluator conformance; identifiers are illustrative.",
+  "cases": [
+    {
+      "name": "bound-profile-and-origin",
+      "url": "https://example.com/offer?source=email",
+      "now": "2024-10-04T00:00:00Z",
+      "cookie": "_rm_ctx=eyJ2IjoxLCJkaW1zIjp7ImF1ZGllbmNlIjpbInJlYWRlciJdfSwiY2lkIjoiY29udGFjdC1kZW1vIiwiaWRlbnRpdHlTY29wZSI6eyJwcm9qZWN0IjoiZGVtby10ZWFtIiwiY29ubmVjdGlvbiI6ImVtYWlsLWRlbW8ifSwiZXMiOnsidiI6MSwiZCI6MjAwMDAsImIiOiI2MjA5MzdhYyIsInQiOiJhYWFhYWFhYSIsImYiOiJiYmJiYmJiYiIsImgiOiIyOGFhOGU0OCIsImh0IjoiY2NjY2NjY2MiLCJoZiI6IiJ9LCJsYWJlbCI6ImNhZsOpIn0~; __Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%22source%22%3A%5B%22newsletter%22%2C%22email%22%5D%7D%2C%22r%22%3A%22search.example%22%7D",
+      "decodedContext": {
+        "v": 1,
+        "dims": {
+          "audience": [
+            "reader"
+          ]
+        },
+        "cid": "contact-demo",
+        "identityScope": {
+          "project": "demo-team",
+          "connection": "email-demo"
+        },
+        "es": {
+          "v": 1,
+          "d": 20000,
+          "b": "620937ac",
+          "t": "aaaaaaaa",
+          "f": "bbbbbbbb",
+          "h": "28aa8e48",
+          "ht": "cccccccc",
+          "hf": ""
+        },
+        "label": "café"
+      },
+      "decodedTouch": {
+        "v": 1,
+        "q": {
+          "source": [
+            "newsletter",
+            "email"
+          ]
+        },
+        "r": "search.example"
+      },
+      "snapshotIdentity": {
+        "project": "demo-team",
+        "connection": "email-demo",
+        "contactId": "contact-demo",
+        "origin": "https://example.com",
+        "today": 20000
+      },
+      "snapshotOutcomes": {
+        "aaaaaaaa": true,
+        "bbbbbbbb": false,
+        "cccccccc": true
+      },
+      "plan": {
+        "version": 1,
+        "teamPid": "demo-team",
+        "connectionScope": "email-demo",
+        "queryNames": [
+          "source"
+        ],
+        "dimensions": [
+          {
+            "id": "audience",
+            "isMultiWinning": false,
+            "segments": [
+              {
+                "id": "reader"
+              },
+              {
+                "id": "other"
+              }
+            ],
+            "signals": []
+          }
+        ],
+        "campaigns": [
+          {
+            "id": "welcome",
+            "is_active": true,
+            "variants": [
+              {
+                "id": "profile",
+                "rules": {
+                  "$source": "integration",
+                  "$type": "tags",
+                  "operator": "includes any",
+                  "tagIds": [
+                    "member"
+                  ],
+                  "edge": {
+                    "supported": false,
+                    "reason": "integration-signal",
+                    "key": "aaaaaaaa"
+                  }
+                },
+                "actions": [
+                  {
+                    "actionId": "profile-copy",
+                    "campaignId": "welcome",
+                    "variantId": "profile",
+                    "type": "MODIFY_ELEMENT",
+                    "selector": "h1",
+                    "page": [
+                      {
+                        "domain": "*",
+                        "path": "/*"
+                      }
+                    ],
+                    "modifications": {
+                      "text": "profile-copy"
+                    },
+                    "edge": {
+                      "supported": true,
+                      "operations": [
+                        "text"
+                      ],
+                      "deferredOperations": []
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "page",
+                "rules": {
+                  "$source": "pageviews",
+                  "$type": "path",
+                  "occurrence": "first",
+                  "edge": {
+                    "supported": false,
+                    "reason": "landing-page",
+                    "key": "cccccccc"
+                  }
+                },
+                "actions": [
+                  {
+                    "actionId": "landing-copy",
+                    "campaignId": "welcome",
+                    "variantId": "page",
+                    "type": "MODIFY_ELEMENT",
+                    "selector": "h1",
+                    "page": [
+                      {
+                        "domain": "*",
+                        "path": "/*"
+                      }
+                    ],
+                    "modifications": {
+                      "text": "landing-copy"
+                    },
+                    "edge": {
+                      "supported": true,
+                      "operations": [
+                        "text"
+                      ],
+                      "deferredOperations": []
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "answers",
+                "rules": {
+                  "all": [
+                    {
+                      "segment": "reader"
+                    }
+                  ]
+                },
+                "actions": [
+                  {
+                    "actionId": "answered-copy",
+                    "campaignId": "welcome",
+                    "variantId": "answers",
+                    "type": "MODIFY_ELEMENT",
+                    "selector": "h1",
+                    "page": [
+                      {
+                        "domain": "*",
+                        "path": "/*"
+                      }
+                    ],
+                    "modifications": {
+                      "text": "answered-copy"
+                    },
+                    "edge": {
+                      "supported": true,
+                      "operations": [
+                        "text"
+                      ],
+                      "deferredOperations": []
+                    }
+                  },
+                  {
+                    "actionId": "browser-only",
+                    "campaignId": "welcome",
+                    "variantId": "answers",
+                    "type": "MODIFY_ELEMENT",
+                    "selector": "h1",
+                    "page": [
+                      {
+                        "domain": "*",
+                        "path": "/*"
+                      }
+                    ],
+                    "modifications": {
+                      "text": "browser-only"
+                    },
+                    "edge": {
+                      "supported": false
+                    }
+                  },
+                  {
+                    "actionId": "off-page",
+                    "campaignId": "welcome",
+                    "variantId": "answers",
+                    "type": "MODIFY_ELEMENT",
+                    "selector": "h1",
+                    "page": [
+                      {
+                        "domain": "*",
+                        "path": "/elsewhere"
+                      }
+                    ],
+                    "modifications": {
+                      "text": "off-page"
+                    },
+                    "edge": {
+                      "supported": true,
+                      "operations": [
+                        "text"
+                      ],
+                      "deferredOperations": []
+                    }
+                  },
+                  {
+                    "actionId": "missing-page",
+                    "campaignId": "welcome",
+                    "variantId": "answers",
+                    "type": "MODIFY_ELEMENT",
+                    "selector": "h1",
+                    "modifications": {
+                      "text": "missing-page"
+                    },
+                    "edge": {
+                      "supported": true,
+                      "operations": [
+                        "text"
+                      ],
+                      "deferredOperations": []
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "touch",
+                "rules": {
+                  "$source": "query",
+                  "query": "source",
+                  "occurrence": "first touch",
+                  "operator": "equals",
+                  "value": "newsletter"
+                },
+                "actions": [
+                  {
+                    "actionId": "attributed-copy",
+                    "campaignId": "welcome",
+                    "variantId": "touch",
+                    "type": "MODIFY_ELEMENT",
+                    "selector": "h1",
+                    "page": [
+                      {
+                        "domain": "*",
+                        "path": "/*"
+                      }
+                    ],
+                    "modifications": {
+                      "text": "attributed-copy"
+                    },
+                    "edge": {
+                      "supported": true,
+                      "operations": [
+                        "text"
+                      ],
+                      "deferredOperations": []
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "empty",
+                "rules": {
+                  "all": []
+                },
+                "actions": []
+              }
+            ]
+          },
+          {
+            "id": "inactive",
+            "is_active": false,
+            "variants": [
+              {
+                "id": "inactive",
+                "rules": true,
+                "actions": [
+                  {
+                    "actionId": "inactive-copy",
+                    "campaignId": "welcome",
+                    "variantId": "inactive",
+                    "type": "MODIFY_ELEMENT",
+                    "selector": "h1",
+                    "page": [
+                      {
+                        "domain": "*",
+                        "path": "/*"
+                      }
+                    ],
+                    "modifications": {
+                      "text": "inactive-copy"
+                    },
+                    "edge": {
+                      "supported": true,
+                      "operations": [
+                        "text"
+                      ],
+                      "deferredOperations": []
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "actionIds": [
+        "profile-copy",
+        "landing-copy",
+        "answered-copy",
+        "attributed-copy"
+      ],
+      "decisions": [
+        {
+          "campaignId": "welcome",
+          "variantId": "profile",
+          "actionIds": [
+            "profile-copy"
+          ]
+        },
+        {
+          "campaignId": "welcome",
+          "variantId": "page",
+          "actionIds": [
+            "landing-copy"
+          ]
+        },
+        {
+          "campaignId": "welcome",
+          "variantId": "answers",
+          "actionIds": [
+            "answered-copy"
+          ]
+        },
+        {
+          "campaignId": "welcome",
+          "variantId": "touch",
+          "actionIds": [
+            "attributed-copy"
+          ]
+        }
+      ]
+    }
+  ]
+}

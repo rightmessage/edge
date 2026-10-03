@@ -1,0 +1,70 @@
+{
+  "name": "@rightmessage/edge",
+  "version": "0.1.0",
+  "description": "Portable, fail-open edge personalization for RightMessage",
+  "type": "module",
+  "license": "MIT",
+  "author": "RightMessage",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rightmessage/edge.git"
+  },
+  "homepage": "https://github.com/rightmessage/edge#readme",
+  "bugs": {
+    "url": "https://github.com/rightmessage/edge/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "tests/fixtures/conformance.json"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./wasm": {
+      "types": "./dist/wasm.d.ts",
+      "import": "./dist/wasm.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "bench:edge-transform": "node scripts/bench-edge-transform.mjs"
+  },
+  "dependencies": {
+    "entities": "^8.1.0"
+  },
+  "peerDependencies": {
+    "html-rewriter-wasm": "^0.4.1"
+  },
+  "peerDependenciesMeta": {
+    "html-rewriter-wasm": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "eslint": "^9.39.0",
+    "typescript-eslint": "^8.46.0",
+    "@eslint/js": "^9.39.0",
+    "esbuild": "^0.28.1",
+    "miniflare": "^5.20260828.0-alpha",
+    "jsdom": "^24.1.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "html-rewriter-wasm": "^0.4.1",
+    "@types/node": "^22.18.0"
+  }
+}

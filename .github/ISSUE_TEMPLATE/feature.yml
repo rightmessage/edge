@@ -1,0 +1,10 @@
+name: Feature request
+description: Propose a portable edge capability
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and proposed behavior
+      description: Describe the user need, runtime, alternatives and expected fail-open behavior.
+    validations:
+      required: true
