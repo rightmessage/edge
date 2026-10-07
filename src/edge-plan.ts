@@ -1,4 +1,5 @@
 import { decodeContextCookie, decodeEdgeSignals } from "./context.js";
+import { campaignHoldback, decodeCampaignArms, holdoutUnit } from "./holdout.js";
 import type { Action, Decision, EdgePlan, EdgeRequest, EvaluationTime, PageCriterion, Rule, RuleObject } from "./plan-types.js";
 import type { TouchState } from "./touch-cookie.js";
 
@@ -6,6 +7,7 @@ import type { TouchState } from "./touch-cookie.js";
 // become false: doing so could choose a later single-winning segment incorrectly.
 type Truth = boolean | null;
 const UNKNOWN = null;
+
 const and = (a: Truth, b: Truth): Truth => a === false || b === false ? false : a === UNKNOWN || b === UNKNOWN ? UNKNOWN : true;
 const or = (a: Truth, b: Truth): Truth => a === true || b === true ? true : a === UNKNOWN || b === UNKNOWN ? UNKNOWN : false;
 const glob = (value: string, pattern: unknown): boolean => new RegExp(`^${String(pattern).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`).test(value);
@@ -356,13 +358,22 @@ export function decide(plan: EdgePlan, request: EdgeRequest, touch: TouchState, 
     const path = normalize(criterion.path || "");
     return path.includes("*") ? new RegExp(`^${path.replace("*", ".*")}$`).test(normalize(url.pathname)) : path === normalize(url.pathname);
   });
+  // Arms follow the browser: a recorded arm (mirrored in `_rm_ctx.ca`) wins, then the shared
+  // holdout hash of the visitor unit. The holdout arm and an unknown arm leave the campaign to the
+  // browser, which keeps the original content for the holdout and records both arms' exposures.
+  const arms = decodeCampaignArms(context);
+  const unit = holdoutUnit(touch.u, context);
   const decisions: Decision[] = [];
   for (const campaign of plan.campaigns) {
-    if (!campaign.is_active) continue;
+    if (!campaign.is_active || campaignHoldback(campaign, arms, unit) !== false) continue;
     for (const variant of campaign.variants || []) {
       if (rulesMatch(variant.rules) !== true) continue;
       const actions: Action[] = [];
-      for (const action of variant.actions || []) if (action.edge?.supported === true && matchesPage(action.page)) actions.push(action);
+      for (const action of variant.actions || []) {
+        // `campaign-experiment` operations run only once the treatment arm is assigned above.
+        const executable = action.edge?.supported === true || (action.edge?.reason === "campaign-experiment" && (action.edge.operations?.length ?? 0) > 0);
+        if (executable && matchesPage(action.page)) actions.push(action);
+      }
       if (actions.length) decisions.push({ campaignId: campaign.id, variantId: variant.id, actions });
     }
   }

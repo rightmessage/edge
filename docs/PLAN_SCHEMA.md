@@ -1,6 +1,6 @@
 # Published plan schema, version 1
 
-This describes the public JSON consumed by `@rightmessage/edge`, not an alternative authoring format. A published plan preserves the browser's rule vocabulary and browser-only work. The edge executes only decisions it can establish and operations the compiler explicitly permits; the browser remains authoritative.
+This describes the public JSON consumed by `@rightmessage/edge`, not an alternative authoring format. A published plan preserves the browser's rule vocabulary but carries only actions the edge may execute at least in part; wholly browser-owned actions are omitted and stay with the browser tag. The edge executes only decisions it can establish and operations the compiler explicitly permits; the browser remains authoritative.
 
 ## Live reference
 
@@ -59,10 +59,10 @@ The default per-request deadline is 300 ms. The in-memory cache retains up to tw
 | `teamPid` | string | Public project identifier; must match the release/configuration. |
 | `queryNames` | string array | Compiler-discovered query names needed by published rules. Sorted by the compiler; `_rm_ctx` is excluded. This is the touch-history allowlist, not visitor query values. |
 | `dimensions` | dimension array | Referenced dimensions, including transitive dependencies through signals. Not necessarily every dimension in the project. |
-| `campaigns` | campaign array | Ordered published campaign/variant/action tree. There is no root `actions` array. |
+| `campaigns` | campaign array | Ordered live campaigns, limited to variants and actions with at least one edge-permitted operation. Holdout-tested campaigns are included behind `campaign-experiment`. There is no root `actions` array. |
 | `connectionScope` | optional string | Opaque active integration-connection scope used to reject recorded outcomes from another connection. It is not a contact ID, credential, or revision. |
 
-Object key order is not semantic, except that attribute/style modification ordering must be preserved. Array order is significant, including segment priority and action order. Do not reorder or strip browser-only information.
+Object key order is not semantic, except that attribute/style modification ordering must be preserved. Array order is significant, including segment priority and action order. Do not reorder or strip what the plan carries.
 
 ## Dimensions and signals
 
@@ -136,7 +136,20 @@ Leaf `edge` metadata contains `supported`, `reason`, and sometimes `key`. Signal
 
 The live campaign shape includes `id`, `name`, `is_active`, `base_url`, `condition`, `dimension_id`, `goal_ids`, `recipe_code`, `testing`, and `variants`. Variants contain `id`, `name`, `rules`, and `actions`.
 
-The evaluator considers active campaigns, eligible variants, and page-matching actions in published order. It does not invent experiment assignment, evaluate campaign display metadata as another rule tree, or stop after the first eligible campaign. Experimental campaigns are made browser-owned by compiler action annotations. The edge action boundary is `edge.supported === true` plus page eligibility, followed by successful transformation of actual matching elements.
+The evaluator considers active campaigns, eligible variants, and page-matching actions in published order. It does not evaluate campaign display metadata as another rule tree or stop after the first eligible campaign. Before a campaign's variants, it resolves the visitor's holdout arm exactly as the browser does (see [Holdout arms](#holdout-arms)) and considers only the treatment arm. For the holdout arm, or when the arm is unknown, the browser keeps the default content and records the exposure. The edge action boundary is `edge.supported === true` plus page eligibility, followed by successful transformation of actual matching elements. In a campaign resolved to its treatment arm, an action with `edge.reason === "campaign-experiment"` and a non-empty `edge.operations` also crosses that boundary.
+
+### Holdout arms
+
+A campaign whose `testing.is_enabled` is truthy publishes every retained action as `{"supported": false, "reason": "campaign-experiment", "operations": [...], "deferredOperations": [...]}`. Evaluators that cannot assign arms (0.1.x) skip such actions and never personalize the holdout arm. A publisher may omit tested campaigns to keep the plan within the 1 MiB limit; omitted campaigns stay browser-applied.
+
+The arm (`campaignHoldback`) is chosen in this order:
+
+1. A record for the campaign in `_rm_ctx.ca`. It wins for every campaign, including a non-experiment campaign that still holds a sticky holdout.
+2. For a campaign without testing enabled, the treatment arm.
+3. `holdoutPoint(unit, campaignId) < Number(testing.withhold || 10)` holds the visitor out. The point is FNV-1a over the UTF-16 code units of `rm-holdout-v1 NUL unit NUL campaignId`, finalized with murmur3 `fmix32` and scaled to [0, 100).
+4. With no unit, the arm is unknown.
+
+The unit is the touch cookie's `u`, else `_rm_ctx.vid` when `_rm_ctx.ca` is present. The browser hashes the same unit. `personalizeResponse` mints `u` only for a request carrying neither `__Host-rm_touch` nor `_rm_ctx`. See [COOKIES.md](COOKIES.md).
 
 `evaluatePlan(plan, request, touch, now?)` returns the eligible actions in that order. `decide(plan, request, touch, now?)` returns the same selections grouped as `{ campaignId, variantId, actions }[]`, omitting groups with no eligible actions. Neither API performs HTML rewriting; selectors and operation success are resolved by the transform.
 
@@ -180,7 +193,7 @@ Action metadata is:
 
 Null/empty attribute and style values are not compiler candidates. Empty text is not a text candidate. Unknown modification keys are retained as deferred tokens with `browser-modification`, rather than silently implemented by the edge. Strings containing `{{` or `{%` anywhere in an operation's values are dynamic and deferred.
 
-Action-level reasons (`campaign-experiment`, `browser-action`, `browser-selector`, `browser-targeting`) defer every candidate. Operation reasons include `dynamic-value`, `browser-property`, `browser-visibility`, `browser-modification`, and `browser-operation-order`. The last prevents partial execution from reordering overlapping writes:
+Actions the edge cannot execute at all are omitted from the plan: non-`MODIFY_ELEMENT` actions, unsupported selectors, browser targeting, and actions whose every operation is deferred. Variants and campaigns left without actions are omitted too, so plan size tracks edge work rather than campaign content. Operation reasons on retained actions include `dynamic-value`, `browser-property`, `browser-visibility`, `browser-modification`, and `browser-operation-order`. The last prevents partial execution from reordering overlapping writes:
 
 - If either `attr:src` or `attr:srcset` is deferred, both present candidates are deferred.
 - Deferred `attr:style` or any deferred `style:*` write defers all present `style:*` candidates.

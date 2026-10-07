@@ -68,7 +68,7 @@ The optional `/wasm` entry adapts `html-rewriter-wasm` (lol-html) to the same st
 ## Pure decisions for server rendering
 
 ```ts
-import { decide, observeTouchCookie, startPlanLoad } from '@rightmessage/edge';
+import { decide, firstRequestHoldoutUnit, observeTouchCookie, startPlanLoad } from '@rightmessage/edge';
 
 const load = startPlanLoad(request, {
   teamPid: '1213277114',
@@ -76,11 +76,15 @@ const load = startPlanLoad(request, {
 });
 const outcome = await load.promise;
 if (outcome.loaded) {
+  const cookie = request.headers.get('cookie') ?? '';
   const observation = observeTouchCookie(
-    request.headers.get('cookie') ?? '',
+    cookie,
     outcome.loaded.plan.queryNames,
     request.url,
     request.headers.get('referer') ?? '',
+    null,
+    [],
+    firstRequestHoldoutUnit(cookie), // lets a first request run A/B-tested campaigns
   );
   const decisions = decide(outcome.loaded.plan, request, observation.state);
   // Decision[]: { campaignId, variantId, actions } in published order.
@@ -89,6 +93,8 @@ if (outcome.loaded) {
 ```
 
 `decide` never touches HTML or mutates request/plan/touch state. It includes only supported, page-matching actions from definitely eligible variants. `evaluatePlan` returns the same actions flattened in order. Unknown rules stay unknown: they do not accidentally select a lower-priority single-winning segment. Decisions are personalization hints, not authentication or authorization.
+
+Campaigns with A/B testing (a holdout share) are decided per visitor arm. The arm the edge assigns is the one the browser tag assigns from the same cookies: a recorded arm in `_rm_ctx`, else a shared hash of the visitor's unit. The edge personalizes only the treatment arm. The browser keeps the default content for the holdout and records exposures for both arms. See [holdout arms](docs/PLAN_SCHEMA.md#holdout-arms).
 
 ## API
 

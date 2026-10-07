@@ -7,6 +7,7 @@ import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { evaluatePlan } from "../src/edge-plan.ts";
 import { edgeSignalBinding } from "../src/context.ts";
+import { holdoutPoint } from "../src/holdout.ts";
 
 let mf;
 const revision = "a".repeat(64);
@@ -704,5 +705,27 @@ test("negative touch-query rules distinguish absent observations from observed e
       assert.deepEqual(evaluatePlan(queryPlan, request, { v: 1, q: {} }), []);
       assert.deepEqual(evaluatePlan(queryPlan, request, { v: 1, q: { biz: ["", ""] } }), [target]);
     }
+  }
+});
+
+test("a first request mints the holdout unit it assigns with; a returning browser's request does not", async () => {
+  const experiment = (withhold) => {
+    const value = plan([action("h1", { text: "Treatment" }, { edge: { supported: false, reason: "campaign-experiment", operations: ["text"], deferredOperations: [] } })]);
+    value.campaigns[0].testing = { is_enabled: true, withhold };
+    return value;
+  };
+  const unitOf = (result) => decodeURIComponent(result.setCookies.find(value => value.startsWith("__Host-rm_touch=")).split(";")[0].slice(16)).match(/"u":"([^"]+)"/)?.[1];
+  for (const withhold of [30, 70]) {
+    const result = await run({ html: "<html><head></head><body><h1>Default</h1></body></html>", plan: experiment(withhold) });
+    const unit = unitOf(result);
+    assert.match(unit, /^[A-Za-z0-9_-]{22}$/);
+    const held = holdoutPoint(unit, "campaign") < withhold;
+    assert.equal(result.headers["x-rm-edge"], held ? "bypass:cookie-only" : "applied");
+    assert.equal(result.html.includes(">Treatment</h1>"), !held);
+  }
+  for (const cookie of [`_rm_ctx=${contextCookie({ vid: "v" })}`, "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%7D"]) {
+    const result = await run({ html: "<html><head></head><body><h1>Default</h1></body></html>", plan: experiment(1), requestHeaders: { cookie } });
+    assert.equal(result.html.includes(">Treatment</h1>"), false);
+    assert.equal(result.setCookies.some(value => value.includes("%22u%22")), false);
   }
 });

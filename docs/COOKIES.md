@@ -6,7 +6,7 @@ These cookies are best-effort first-party display inputs, not authentication, an
 
 `decodeContextCookie(cookieHeader)` reads the first `_rm_ctx` entry, URI-decodes it, reverses the browser's base64 substitutions (`-` → `+`, `_` → `/`, `~` → `=`), strictly decodes UTF-8, and parses JSON. Missing, malformed, invalid UTF-8, or non-version-1 payloads return `{}`. The decoder preserves version-1 fields rather than imposing a second browser schema.
 
-Relevant fields are `v: 1`, `dims` (dimension IDs to answered segment arrays), `cid` (contact identity), `identityScope: {project, connection}`, and optional `es` (recorded outcomes). A dimension absent from `dims` is unanswered. The browser writes answers synchronously and flushes pending context writes before navigation.
+Relevant fields are `v: 1`, `dims` (dimension IDs to answered segment arrays), `cid` (contact identity), `identityScope: {project, connection}`, optional `es` (recorded outcomes), `vid` (the browser's visitor ID), and optional `ca` (the campaign arm ledger). A dimension absent from `dims` is unanswered. The browser writes answers synchronously and flushes pending context writes before navigation.
 
 The browser writes `_rm_ctx` across the registrable domain. Profile outcomes can therefore be used on the apex and sibling subdomains. Pageview history is per origin, so landing-page outcomes require an additional origin binding. This package only decodes `_rm_ctx`; it does not set its Domain or rewrite it.
 
@@ -36,13 +36,19 @@ The binding values above are illustrative. Use `edgeSignalBinding(project, scope
 
 The browser omits `es` whenever including it would push `_rm_ctx` beyond 3,500 encoded characters. This is the browser writer's bound, not an extra truncation policy in `decodeContextCookie`. The browser never reads `es` as a hard answer or uses it for its own evaluation, syncing, or email-platform writes. Successful fresh profile reads refresh outcomes; cached or failed reads do not. The decoder and constants follow the browser codec and must change with that contract.
 
+### Campaign arm ledger
+
+`ca` is `{"v": 1, "r": [[campaignId, exposed, holdback], ...]}`, with at most 128 records. `decodeCampaignArms(context)` returns campaign ID → `holdback`. It skips malformed records and drops campaign IDs that are recorded more than once, as the browser does. The browser adds records only while they fit its cookie budget, so an absent record may still be an arm the browser holds. Once present, `ca` makes `vid` a holdout unit. A context without `ca` may predate the ledger mirror, so its `vid` is not used.
+
 ## `__Host-rm_touch`: observed attribution
 
 `decodeTouchCookie(header, queryNames)` and `observeTouchCookie(header, queryNames, location, referrer, firstPage?, pages?)` share this URI-encoded JSON contract:
 
 ```json
-{"v":1,"q":{"source":["first value","last value"]},"r":"search.example"}
+{"v":1,"q":{"source":["first value","last value"]},"r":"search.example","u":"AAAAAAAAAAAAAAAAAAAAAA"}
 ```
+
+`u` is a 22-character base64url holdout unit (128 random bits). `personalizeResponse` mints it with `mintHoldoutUnit()` only when the request has neither this cookie nor `_rm_ctx`, which identifies a visitor whose browser holds no arms yet. `observeTouchCookie(..., unit)` records it only when the cookie has no valid `u`, and never replaces one. The browser preserves `u` but never mints it. Both writers serialize keys in `v, q, r, u` order. Invalid units are dropped on decode.
 
 Only allowlisted query names are retained. Names are deduplicated and sorted; `_rm_ctx` is always excluded. Each retained value is a pair of strings. Duplicate current query parameters use their last decoded value. An observed empty string is a value, not absence. A first/last-touch name absent from the cookie has no observed pageview and matches no operator, including negative operators.
 

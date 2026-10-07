@@ -1,6 +1,6 @@
 import { boundedBytes, SOURCE_CAP } from './bytes.js';
 import { evaluatePlan } from './edge-plan.js';
-import { observeTouchCookie } from './touch-cookie.js';
+import { firstRequestHoldoutUnit, observeTouchCookie } from './touch-cookie.js';
 import { transformHTML } from './transform.js';
 import type { PlanLoad } from './plan-load.js';
 import type { HTMLRewriterConstructor } from './rewriter-types.js';
@@ -39,7 +39,8 @@ export async function personalizeResponse(request: Request, origin: Response, pl
   if (!outcome.loaded) return bypass(outcome.reason);
   let observation;
   try {
-    observation = (dependencies.observeTouchCookie ?? observeTouchCookie)(request.headers.get('cookie') ?? '', outcome.loaded.plan.queryNames, url.href, request.headers.get('referer') ?? '');
+    const header = request.headers.get('cookie') ?? '';
+    observation = (dependencies.observeTouchCookie ?? observeTouchCookie)(header, outcome.loaded.plan.queryNames, url.href, request.headers.get('referer') ?? '', null, [], firstRequestHoldoutUnit(header));
   } catch { return bypass('attribution-failed'); }
   const cookie = observation.changed ? observation.cookie : null;
   try {
