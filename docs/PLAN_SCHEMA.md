@@ -142,7 +142,7 @@ The evaluator considers active campaigns, eligible variants, and page-matching a
 
 A campaign whose `testing.is_enabled` is truthy publishes every retained action as `{"supported": false, "reason": "campaign-experiment", "operations": [...], "deferredOperations": [...]}`. Evaluators that cannot assign arms (0.1.x) skip such actions and never personalize the holdout arm. A publisher may omit tested campaigns to keep the plan within the 1 MiB limit; omitted campaigns stay browser-applied.
 
-The arm (`campaignHoldback`) is chosen in this order:
+The arm (`campaignHoldback`) is chosen in this order. A request whose last `debug` query value is `true` or `yes` (`debugForcesTreatment`) skips it and takes the treatment arm, matching the browser debugger, which neither reads nor records arms.
 
 1. A record for the campaign in `_rm_ctx.ca`. It wins for every campaign, including a non-experiment campaign that still holds a sticky holdout.
 2. For a campaign without testing enabled, the treatment arm.
@@ -273,7 +273,7 @@ A successful transform emits `meta[name="rm-edge-loader"]` containing the **vali
 
 The browser loader must use the pinned URL from the same release as the plan, not the latest unpinned tag URL. The browser's `window.RM_RELEASE_REVISION` must agree with the receipt revision before adoption. Deferred operations, unmatched/later targets, restoration, and analytics remain browser-owned; a definite eligibility disagreement is corrected by the browser. This pairing is why serving an old cached plan is safe only with its corresponding old pinned loader. Never combine a plan from one release with a loader fetched from a later release pointer.
 
-`requestBypassReason` excludes disabled execution (`not-production`), non-GET requests (`request-method`), RSC requests unless `allowRsc` is enabled (`rsc`), and URLs containing `preview`, `rmpreview`, `__rm_test`, or `rmeditor` (`preview`). The latter are presence checks, not truthy-value checks.
+`requestBypassReason` excludes disabled execution (`not-production`), non-GET requests (`request-method`), RSC requests unless `allowRsc` is enabled (`rsc`), URLs containing `preview`, `rmpreview`, `__rm_test`, or `rmeditor` (`preview`), and requests carrying the tag's draft-preview session cookie `rm_preview=1` (`preview`). The query keys are presence checks, not truthy-value checks.
 
 Non-HTML responses pass through. HTML with a non-200 origin status or unsupported declared charset bypasses. Load failures, timeouts, unsupported versions, and invalid plans preserve the origin body; without a validated plan there is no guessed query allowlist or touch-cookie update. No eligible/successful actions yield `no-actions`, or `cookie-only` when attribution alone changed. Attribution, transform, selector, serialization, and buffer failures fail open rather than deliver partial personalization.
 

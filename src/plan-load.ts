@@ -36,6 +36,8 @@ export function requestBypassReason(request: Request, config: Pick<EdgeConfig, '
   if (!config.allowRsc && request.headers.has('rsc')) return 'rsc';
   const url = new URL(request.url);
   if (['preview', 'rmpreview', '__rm_test', 'rmeditor'].some(name => url.searchParams.has(name))) return 'preview';
+  // The tag's draft-preview session cookie: the browser runs the draft, never the published plan.
+  if (/(?:^|;\s*)rm_preview=1(?:;|$)/.test(request.headers.get('cookie') ?? '')) return 'preview';
   return null;
 }
 function tagConfig(config: EdgeConfig): ValidConfig {

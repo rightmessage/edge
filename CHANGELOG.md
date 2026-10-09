@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- A debugger request (last `debug` query value `true` or `yes`) takes the treatment arm of every tested campaign, including over a recorded or assigned holdout, matching the browser debugger. New export: `debugForcesTreatment`.
+- `requestBypassReason` treats the tag's `rm_preview=1` draft-preview session cookie like the preview query keys, so previews that navigated away from `?preview` no longer receive the published plan.
+
 ## 0.2.0
 
 - Campaigns with A/B testing run at the edge. Plans publish their operations behind `edge.reason: "campaign-experiment"`, which 0.1.x skips. `decide` assigns the visitor's arm exactly as the browser tag does: a recorded arm in `_rm_ctx.ca`, else `holdoutPoint(unit, campaignId) < withhold || 10`. It personalizes only the treatment arm. A recorded holdout also suppresses campaigns that no longer test.

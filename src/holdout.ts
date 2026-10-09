@@ -64,3 +64,12 @@ export function campaignHoldback(campaign: Campaign, arms: Map<string, boolean> 
   if (unit === null) return null;
   return holdoutPoint(unit, campaign.id) < Number(testing.withhold || 10);
 }
+
+/**
+ * The browser tag's debugger (`?debug=true` or `?debug=yes`, last value wins) always renders the
+ * treatment arm without recording it, so the edge personalizes every tested campaign for it too.
+ */
+export function debugForcesTreatment(url: URL): boolean {
+  const value = url.searchParams.getAll("debug").at(-1);
+  return value === "true" || value === "yes";
+}

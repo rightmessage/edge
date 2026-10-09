@@ -85,3 +85,18 @@ test("the touch cookie records a minted unit once, keeps it, and orders keys can
     assert.equal(decodeTouchCookie(`${TOUCH_COOKIE_NAME}=${encodeURIComponent(JSON.stringify({ v: 1, q: {}, u: invalid }))}`, []).u, undefined);
   }
 });
+
+test("a debugger request takes the treatment arm over a recorded holdout, an assigned holdout, and an unknown arm", () => {
+  const testing = { is_enabled: true, withhold: 100 };
+  const ledger = context({ vid: "v", ca: { v: 1, r: [["cpn_opCBD8W3", true, true]] } });
+  const decided = (query, cookie = "", touch = { q: {}, u: HELD_UNIT }) =>
+    decide(plan(testing), new Request(`https://rightmessage.com/?${query}`, { headers: { cookie } }), touch).length === 1;
+  for (const query of ["debug=true", "debug=yes", "debug=false&debug=true"]) {
+    assert.equal(decided(query), true, query);
+    assert.equal(decided(query, ledger), true, query);
+    assert.equal(decided(query, "", { q: {} }), true, query);
+  }
+  for (const query of ["debug=false", "debug=1", "debug", "debug=true&debug=false", "rm_debug=true"]) {
+    assert.equal(decided(query), false, query);
+  }
+});

@@ -652,6 +652,19 @@ test("the exact preview query parameter bypasses published changes and cookie ob
   assert.equal(ordinary.headers["x-rm-edge"], "applied");
 });
 
+test("the tag's draft-preview session cookie bypasses the published plan", async () => {
+  const html = '<html><head></head><body><h1>café teams &amp; friends</h1></body></html>';
+  for (const cookie of ["rm_preview=1", "a=b; rm_preview=1", "rm_preview=1; a=b"]) {
+    const result = await run({ html, url: "https://rightmessage.com/?biz=saas", requestHeaders: { cookie } });
+    assert.equal(result.html, html, cookie);
+    assertBypass(result, "preview");
+  }
+  for (const cookie of ["rm_preview=0", "xrm_preview=1", "rm_preview=10"]) {
+    const result = await run({ html, url: "https://rightmessage.com/?biz=saas", requestHeaders: { cookie } });
+    assert.equal(result.headers["x-rm-edge"], "applied", cookie);
+  }
+});
+
 test("a direct first request stays direct on pricing with a same-site Referer", async () => {
   const directPlan = plan([action("h1", { text: "direct visitor" })], { $source: "referrer", $type: "direct" });
   const first = await run({ plan: directPlan });

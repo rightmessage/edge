@@ -1,5 +1,5 @@
 import { decodeContextCookie, decodeEdgeSignals } from "./context.js";
-import { campaignHoldback, decodeCampaignArms, holdoutUnit } from "./holdout.js";
+import { campaignHoldback, debugForcesTreatment, decodeCampaignArms, holdoutUnit } from "./holdout.js";
 import type { Action, Decision, EdgePlan, EdgeRequest, EvaluationTime, PageCriterion, Rule, RuleObject } from "./plan-types.js";
 import type { TouchState } from "./touch-cookie.js";
 
@@ -361,11 +361,13 @@ export function decide(plan: EdgePlan, request: EdgeRequest, touch: TouchState, 
   // Arms follow the browser: a recorded arm (mirrored in `_rm_ctx.ca`) wins, then the shared
   // holdout hash of the visitor unit. The holdout arm and an unknown arm leave the campaign to the
   // browser, which keeps the original content for the holdout and records both arms' exposures.
+  // A debugger request always takes the treatment arm, as the browser does.
+  const forceTreatment = debugForcesTreatment(url);
   const arms = decodeCampaignArms(context);
   const unit = holdoutUnit(touch.u, context);
   const decisions: Decision[] = [];
   for (const campaign of plan.campaigns) {
-    if (!campaign.is_active || campaignHoldback(campaign, arms, unit) !== false) continue;
+    if (!campaign.is_active || (!forceTreatment && campaignHoldback(campaign, arms, unit) !== false)) continue;
     for (const variant of campaign.variants || []) {
       if (rulesMatch(variant.rules) !== true) continue;
       const actions: Action[] = [];
