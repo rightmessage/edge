@@ -1,0 +1,174 @@
+{
+  "vectors": [
+    {
+      "unit": "AAAAAAAAAAAAAAAAAAAAAA",
+      "campaignId": "cpn_opCBD8W3",
+      "audienceId": "var_saas",
+      "testId": "abt_AbCdEf012345",
+      "run": "abr_AbCdEf0123456789",
+      "point": 32.244785595685244
+    },
+    {
+      "unit": "3f2b8c1e-7a44-4d0e-9b1f-2c6a0d5e8f71",
+      "campaignId": "cpn_opCBD8W3",
+      "audienceId": "var_saas",
+      "testId": "abt_AbCdEf012345",
+      "run": "abr_AbCdEf0123456789",
+      "point": 42.62512428686023
+    },
+    {
+      "unit": "zZ9_-QkLmNoPqRsTuVwXyA",
+      "campaignId": "cpn_opCBD8W3",
+      "audienceId": "var_saas",
+      "testId": "abt_AbCdEf012345",
+      "run": "abr_AbCdEf0123456789",
+      "point": 81.24668095260859
+    },
+    {
+      "unit": "visitor-é",
+      "campaignId": "cpn_opCBD8W3",
+      "audienceId": "var_saas",
+      "testId": "abt_AbCdEf012345",
+      "run": "abr_AbCdEf0123456789",
+      "point": 81.38492973521352
+    },
+    {
+      "unit": "訪問者-😀",
+      "campaignId": "cpn_opCBD8W3",
+      "audienceId": "var_saas",
+      "testId": "abt_AbCdEf012345",
+      "run": "abr_AbCdEf0123456789",
+      "point": 93.04929706268013
+    }
+  ],
+  "originalVectors": [
+    {
+      "unit": "AAAAAAAAAAAAAAAAAAAAAA",
+      "campaignId": "cpn_opCBD8W3",
+      "audienceId": "original",
+      "testId": "abt_OrigHero0001",
+      "run": "abr_OrigHero00000001",
+      "point": 52.92810380924493,
+      "expected": "B"
+    },
+    {
+      "unit": "zZ9_-QkLmNoPqRsTuVwXyA",
+      "campaignId": "cpn_opCBD8W3",
+      "audienceId": "original",
+      "testId": "abt_OrigHero0001",
+      "run": "abr_OrigHero00000001",
+      "point": 26.31992599926889,
+      "expected": "A"
+    },
+    {
+      "unit": "3f2b8c1e-7a44-4d0e-9b1f-2c6a0d5e8f71",
+      "campaignId": "cpn_opCBD8W3",
+      "audienceId": "original",
+      "testId": "abt_OrigHero0001",
+      "run": "abr_OrigHero00000001",
+      "point": 15.157219441607594,
+      "expected": "A"
+    }
+  ],
+  "boundaries": [
+    {
+      "weights": {
+        "A": 50,
+        "B": 50
+      },
+      "point": 0,
+      "expected": "A"
+    },
+    {
+      "weights": {
+        "A": 50,
+        "B": 50
+      },
+      "point": 49.999999,
+      "expected": "A"
+    },
+    {
+      "weights": {
+        "A": 50,
+        "B": 50
+      },
+      "point": 50,
+      "expected": "B"
+    },
+    {
+      "weights": {
+        "A": 50,
+        "B": 50
+      },
+      "point": 99.999999,
+      "expected": "B"
+    },
+    {
+      "weights": {
+        "D": 25,
+        "B": 25,
+        "A": 25,
+        "C": 25
+      },
+      "point": 0,
+      "expected": "A"
+    },
+    {
+      "weights": {
+        "D": 25,
+        "B": 25,
+        "A": 25,
+        "C": 25
+      },
+      "point": 25,
+      "expected": "B"
+    },
+    {
+      "weights": {
+        "D": 25,
+        "B": 25,
+        "A": 25,
+        "C": 25
+      },
+      "point": 50,
+      "expected": "C"
+    },
+    {
+      "weights": {
+        "D": 25,
+        "B": 25,
+        "A": 25,
+        "C": 25
+      },
+      "point": 75,
+      "expected": "D"
+    },
+    {
+      "weights": {
+        "A": 34,
+        "C": 33,
+        "D": 33
+      },
+      "point": 33.999999,
+      "expected": "A"
+    },
+    {
+      "weights": {
+        "A": 34,
+        "C": 33,
+        "D": 33
+      },
+      "point": 34,
+      "expected": "C"
+    },
+    {
+      "weights": {
+        "A": 34,
+        "C": 33,
+        "D": 33
+      },
+      "point": 67,
+      "expected": "D"
+    }
+  ]
+}

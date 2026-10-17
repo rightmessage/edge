@@ -1,0 +1,1380 @@
+{
+  "config": {
+    "dimensions": [],
+    "campaigns": [
+      {
+        "id": "cpn_opCBD8W3",
+        "is_active": true,
+        "testing": {
+          "is_enabled": true,
+          "withhold": 20
+        },
+        "original": {
+          "test": {
+            "id": "abt_OrigHero0001",
+            "state": "running",
+            "run": "abr_OrigHero00000001",
+            "versions": [
+              {
+                "id": "A",
+                "name": "Control",
+                "weight": 50
+              },
+              {
+                "id": "B",
+                "name": "Variant A",
+                "weight": 50,
+                "overrides": [],
+                "actions": [
+                  {
+                    "id": "act_oh1",
+                    "$type": "MODIFY_ELEMENT",
+                    "page": [
+                      {
+                        "domain": "*",
+                        "path": "*"
+                      }
+                    ],
+                    "selector": "h1",
+                    "modifications": {
+                      "text": "Ship faster"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "variants": [
+          {
+            "id": "var_saas",
+            "rules": {
+              "all": [
+                {
+                  "$source": "query",
+                  "$type": "custom",
+                  "query": "role",
+                  "occurrence": "current",
+                  "operator": "equals",
+                  "value": "saas"
+                }
+              ]
+            },
+            "actions": [
+              {
+                "id": "act_cta",
+                "$type": "MODIFY_ELEMENT",
+                "page": [
+                  {
+                    "domain": "*",
+                    "path": "*"
+                  }
+                ],
+                "selector": "a.cta",
+                "modifications": {
+                  "text": "Start your SaaS trial"
+                }
+              },
+              {
+                "id": "act_sub",
+                "$type": "MODIFY_ELEMENT",
+                "page": [
+                  {
+                    "domain": "*",
+                    "path": "*"
+                  }
+                ],
+                "selector": "p.sub",
+                "modifications": {
+                  "text": "For SaaS teams"
+                }
+              }
+            ],
+            "test": {
+              "id": "abt_AbCdEf012345",
+              "state": "running",
+              "run": "abr_AbCdEf0123456789",
+              "versions": [
+                {
+                  "id": "A",
+                  "name": "Control",
+                  "weight": 50
+                },
+                {
+                  "id": "B",
+                  "name": "Variant A",
+                  "weight": 50,
+                  "overrides": [
+                    {
+                      "actionId": "act_sub",
+                      "fields": [
+                        {
+                          "path": ["text"],
+                          "op": "set",
+                          "value": "Built for SaaS"
+                        }
+                      ]
+                    }
+                  ],
+                  "actions": [
+                    {
+                      "id": "act_badge",
+                      "$type": "MODIFY_ELEMENT",
+                      "page": [
+                        {
+                          "domain": "*",
+                          "path": "*"
+                        }
+                      ],
+                      "selector": ".badge",
+                      "modifications": {
+                        "classes": {
+                          "add": ["is-new"]
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "var_ent",
+            "rules": {
+              "all": [
+                {
+                  "$source": "query",
+                  "$type": "custom",
+                  "query": "role",
+                  "occurrence": "current",
+                  "operator": "equals",
+                  "value": "enterprise"
+                },
+                {
+                  "$source": "pageviews",
+                  "$type": "count",
+                  "operator": "gt",
+                  "value": 3,
+                  "edge": {
+                    "supported": false,
+                    "reason": "browser-history"
+                  }
+                }
+              ]
+            },
+            "actions": [
+              {
+                "id": "act_ent",
+                "$type": "MODIFY_ELEMENT",
+                "page": [
+                  {
+                    "domain": "*",
+                    "path": "*"
+                  }
+                ],
+                "selector": ".hero h1",
+                "modifications": {
+                  "text": "Hi {{ first_name }}"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cpn_deploy0001",
+        "is_active": true,
+        "testing": {
+          "is_enabled": false,
+          "withhold": 0
+        },
+        "original": {
+          "deployment": {
+            "testId": "abt_Deploy000001",
+            "versionId": "B",
+            "name": "Variant A",
+            "deployedAt": "2026-10-01T00:00:00Z",
+            "proven": false,
+            "actions": [
+              {
+                "id": "act_dep",
+                "$type": "MODIFY_ELEMENT",
+                "page": [
+                  {
+                    "domain": "*",
+                    "path": "*"
+                  }
+                ],
+                "selector": "p.sub",
+                "modifications": {
+                  "text": "Teams ship faster"
+                }
+              }
+            ]
+          }
+        },
+        "variants": []
+      }
+    ]
+  },
+  "plan": {
+    "version": 1,
+    "teamPid": "demo-team",
+    "queryNames": ["role"],
+    "dimensions": [],
+    "campaigns": [
+      {
+        "id": "cpn_opCBD8W3",
+        "is_active": true,
+        "testing": {
+          "is_enabled": true,
+          "withhold": 20
+        },
+        "original": {
+          "abTest": {
+            "id": "abt_OrigHero0001",
+            "state": "running",
+            "run": "abr_OrigHero00000001",
+            "weights": {
+              "A": 50,
+              "B": 50
+            }
+          },
+          "actions": [
+            {
+              "id": "act_oh1",
+              "actionId": "act_oh1",
+              "campaignId": "cpn_opCBD8W3",
+              "variantId": "original",
+              "$type": "MODIFY_ELEMENT",
+              "page": [
+                {
+                  "domain": "*",
+                  "path": "*"
+                }
+              ],
+              "versions": ["B"],
+              "selector": "h1",
+              "modifications": {
+                "text": "Ship faster"
+              },
+              "edge": {
+                "supported": true,
+                "reason": null,
+                "operations": ["text"],
+                "deferredOperations": []
+              }
+            }
+          ]
+        },
+        "variants": [
+          {
+            "id": "var_saas",
+            "rules": {
+              "all": [
+                {
+                  "$source": "query",
+                  "$type": "custom",
+                  "query": "role",
+                  "occurrence": "current",
+                  "operator": "equals",
+                  "value": "saas"
+                }
+              ]
+            },
+            "abTest": {
+              "id": "abt_AbCdEf012345",
+              "state": "running",
+              "run": "abr_AbCdEf0123456789",
+              "weights": {
+                "A": 50,
+                "B": 50
+              }
+            },
+            "actions": [
+              {
+                "id": "act_cta",
+                "actionId": "act_cta",
+                "campaignId": "cpn_opCBD8W3",
+                "variantId": "var_saas",
+                "$type": "MODIFY_ELEMENT",
+                "page": [
+                  {
+                    "domain": "*",
+                    "path": "*"
+                  }
+                ],
+                "selector": "a.cta",
+                "modifications": {
+                  "text": "Start your SaaS trial"
+                },
+                "edge": {
+                  "supported": false,
+                  "reason": "campaign-test",
+                  "operations": ["text"],
+                  "deferredOperations": []
+                }
+              },
+              {
+                "id": "act_sub",
+                "actionId": "act_sub",
+                "campaignId": "cpn_opCBD8W3",
+                "variantId": "var_saas",
+                "$type": "MODIFY_ELEMENT",
+                "page": [
+                  {
+                    "domain": "*",
+                    "path": "*"
+                  }
+                ],
+                "versions": ["A"],
+                "selector": "p.sub",
+                "modifications": {
+                  "text": "For SaaS teams"
+                },
+                "edge": {
+                  "supported": false,
+                  "reason": "campaign-test",
+                  "operations": ["text"],
+                  "deferredOperations": []
+                }
+              },
+              {
+                "id": "act_sub",
+                "actionId": "act_sub",
+                "campaignId": "cpn_opCBD8W3",
+                "variantId": "var_saas",
+                "$type": "MODIFY_ELEMENT",
+                "page": [
+                  {
+                    "domain": "*",
+                    "path": "*"
+                  }
+                ],
+                "versions": ["B"],
+                "selector": "p.sub",
+                "modifications": {
+                  "text": "Built for SaaS"
+                },
+                "edge": {
+                  "supported": false,
+                  "reason": "campaign-test",
+                  "operations": ["text"],
+                  "deferredOperations": []
+                }
+              },
+              {
+                "id": "act_badge",
+                "actionId": "act_badge",
+                "campaignId": "cpn_opCBD8W3",
+                "variantId": "var_saas",
+                "$type": "MODIFY_ELEMENT",
+                "page": [
+                  {
+                    "domain": "*",
+                    "path": "*"
+                  }
+                ],
+                "versions": ["B"],
+                "selector": ".badge",
+                "modifications": {
+                  "classes": {
+                    "add": ["is-new"]
+                  }
+                },
+                "edge": {
+                  "supported": false,
+                  "reason": "campaign-test",
+                  "operations": ["classes"],
+                  "deferredOperations": []
+                }
+              }
+            ]
+          },
+          {
+            "id": "var_ent",
+            "rules": {
+              "all": [
+                {
+                  "$source": "query",
+                  "$type": "custom",
+                  "query": "role",
+                  "occurrence": "current",
+                  "operator": "equals",
+                  "value": "enterprise"
+                },
+                {
+                  "$source": "pageviews",
+                  "$type": "count",
+                  "operator": "gt",
+                  "value": 3,
+                  "edge": {
+                    "supported": false,
+                    "reason": "browser-history"
+                  }
+                }
+              ]
+            },
+            "actions": [
+              {
+                "actionId": "act_ent",
+                "campaignId": "cpn_opCBD8W3",
+                "variantId": "var_ent",
+                "page": [
+                  {
+                    "domain": "*",
+                    "path": "*"
+                  }
+                ],
+                "selector": ".hero h1",
+                "edge": {
+                  "supported": false,
+                  "reason": "browser-owned",
+                  "operations": [],
+                  "claims": ["children"]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cpn_deploy0001",
+        "is_active": true,
+        "testing": {
+          "is_enabled": false,
+          "withhold": 0
+        },
+        "original": {
+          "actions": [
+            {
+              "id": "act_dep",
+              "actionId": "act_dep",
+              "campaignId": "cpn_deploy0001",
+              "variantId": "original",
+              "$type": "MODIFY_ELEMENT",
+              "page": [
+                {
+                  "domain": "*",
+                  "path": "*"
+                }
+              ],
+              "selector": "p.sub",
+              "modifications": {
+                "text": "Teams ship faster"
+              },
+              "edge": {
+                "supported": true,
+                "reason": null,
+                "operations": ["text"],
+                "deferredOperations": []
+              }
+            }
+          ]
+        },
+        "variants": []
+      }
+    ]
+  },
+  "html": "<html><head></head><body><section class=\"hero\"><h1>Ship it</h1><p class=\"sub\">For teams</p><a class=\"cta\" href=\"/trial\">Start trial</a><span class=\"badge\">Beta</span></section></body></html>",
+  "cases": [
+    {
+      "name": "S1",
+      "url": "https://example.com/?role=saas",
+      "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "steps": [
+        {
+          "kind": "apply",
+          "actionId": "act_oh1",
+          "versions": ["B"]
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_dep"
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_cta"
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_sub",
+          "versions": ["A"]
+        }
+      ],
+      "receipts": [
+        {
+          "actionId": "act_oh1",
+          "targetId": "e1",
+          "versions": ["B"]
+        },
+        {
+          "actionId": "act_dep",
+          "targetId": "e2"
+        },
+        {
+          "actionId": "act_cta",
+          "targetId": "e3"
+        },
+        {
+          "actionId": "act_sub",
+          "targetId": "e2",
+          "versions": ["A"]
+        }
+      ],
+      "edge": "applied",
+      "setCookie": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22role%22%3A%5B%22saas%22%2C%22saas%22%5D%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "decisions": [
+        {
+          "campaignId": "cpn_opCBD8W3",
+          "variantId": "original",
+          "layer": "original",
+          "versionId": "B",
+          "actionIds": ["act_oh1"]
+        },
+        {
+          "campaignId": "cpn_deploy0001",
+          "variantId": "original",
+          "layer": "original",
+          "actionIds": ["act_dep"]
+        },
+        {
+          "campaignId": "cpn_opCBD8W3",
+          "variantId": "var_saas",
+          "layer": "audience",
+          "versionId": "A",
+          "actionIds": ["act_cta", "act_sub"]
+        }
+      ],
+      "nextDecisions": [
+        {
+          "campaignId": "cpn_opCBD8W3",
+          "variantId": "var_saas",
+          "layer": "audience",
+          "versionId": "A",
+          "actionIds": ["act_cta", "act_sub"]
+        },
+        {
+          "campaignId": "cpn_opCBD8W3",
+          "variantId": "original",
+          "layer": "original",
+          "versionId": "B",
+          "actionIds": ["act_oh1"]
+        },
+        {
+          "campaignId": "cpn_deploy0001",
+          "variantId": "original",
+          "layer": "original",
+          "actionIds": ["act_dep"]
+        }
+      ],
+      "text": {
+        "h1": "Ship faster",
+        "p.sub": "For SaaS teams",
+        "a.cta": "Start your SaaS trial"
+      }
+    },
+    {
+      "name": "S2",
+      "url": "https://example.com/?role=saas",
+      "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22zZ9_-QkLmNoPqRsTuVwXyA%22%7D",
+      "steps": [
+        {
+          "kind": "apply",
+          "actionId": "act_dep"
+        }
+      ],
+      "receipts": [
+        {
+          "actionId": "act_dep",
+          "targetId": "e1"
+        }
+      ],
+      "edge": "applied",
+      "setCookie": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22role%22%3A%5B%22saas%22%2C%22saas%22%5D%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22zZ9_-QkLmNoPqRsTuVwXyA%22%7D",
+      "decisions": [
+        {
+          "campaignId": "cpn_deploy0001",
+          "variantId": "original",
+          "layer": "original",
+          "actionIds": ["act_dep"]
+        }
+      ],
+      "text": {
+        "p.sub": "Teams ship faster"
+      }
+    },
+    {
+      "name": "S3",
+      "url": "https://example.com/?role=enterprise",
+      "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "steps": [
+        {
+          "kind": "apply",
+          "actionId": "act_oh1",
+          "versions": ["B"]
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_dep"
+        },
+        {
+          "kind": "claim",
+          "selector": ".hero h1",
+          "slots": ["children"]
+        }
+      ],
+      "receipts": [
+        {
+          "actionId": "act_dep",
+          "targetId": "e1"
+        }
+      ],
+      "edge": "applied",
+      "setCookie": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22role%22%3A%5B%22enterprise%22%2C%22enterprise%22%5D%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "decisions": []
+    },
+    {
+      "name": "S4",
+      "url": "https://example.com/?role=saas",
+      "cookie": "_rm_ctx=eyJ2IjoxLCJ2aWQiOiIzZjJiOGMxZS03YTQ0LTRkMGUtOWIxZi0yYzZhMGQ1ZThmNzEiLCJhYiI6eyJ2IjoxLCJyIjpbWyJhYnRfQWJDZEVmMDEyMzQ1OmFicl9BYkNkRWYwMTIzNDU2Nzg5Iix0cnVlLCJCIl1dfX0~",
+      "steps": [
+        {
+          "kind": "apply",
+          "actionId": "act_dep"
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_cta"
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_sub",
+          "versions": ["B"]
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_badge",
+          "versions": ["B"]
+        }
+      ],
+      "receipts": [
+        {
+          "actionId": "act_dep",
+          "targetId": "e1"
+        },
+        {
+          "actionId": "act_cta",
+          "targetId": "e2"
+        },
+        {
+          "actionId": "act_sub",
+          "targetId": "e1",
+          "versions": ["B"]
+        },
+        {
+          "actionId": "act_badge",
+          "targetId": "e3",
+          "versions": ["B"]
+        }
+      ],
+      "edge": "applied",
+      "setCookie": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22role%22%3A%5B%22saas%22%2C%22saas%22%5D%7D%2C%22r%22%3A%22%22%2C%22l%22%3A%22%2F%22%7D",
+      "decisions": [
+        {
+          "campaignId": "cpn_deploy0001",
+          "variantId": "original",
+          "layer": "original",
+          "actionIds": ["act_dep"]
+        },
+        {
+          "campaignId": "cpn_opCBD8W3",
+          "variantId": "var_saas",
+          "layer": "audience",
+          "versionId": "B",
+          "actionIds": ["act_cta", "act_sub", "act_badge"]
+        }
+      ],
+      "text": {
+        "p.sub": "Built for SaaS"
+      },
+      "classes": {
+        ".badge": "badge is-new"
+      }
+    },
+    {
+      "name": "S5",
+      "url": "https://example.com/?role=saas",
+      "cookie": "_rm_ctx=eyJ2IjoxLCJ2aWQiOiIzZjJiOGMxZS03YTQ0LTRkMGUtOWIxZi0yYzZhMGQ1ZThmNzEifQ~~",
+      "steps": [
+        {
+          "kind": "claim",
+          "selector": "h1",
+          "slots": ["children"]
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_dep"
+        },
+        {
+          "kind": "claim",
+          "selector": "a.cta",
+          "slots": ["children"]
+        },
+        {
+          "kind": "claim",
+          "selector": "p.sub",
+          "slots": ["children"]
+        },
+        {
+          "kind": "claim",
+          "selector": "p.sub",
+          "slots": ["children"]
+        },
+        {
+          "kind": "claim",
+          "selector": ".badge",
+          "slots": ["class"]
+        }
+      ],
+      "receipts": [],
+      "edge": "bypass:cookie-only",
+      "setCookie": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22role%22%3A%5B%22saas%22%2C%22saas%22%5D%7D%2C%22r%22%3A%22%22%2C%22l%22%3A%22%2F%22%7D",
+      "decisions": []
+    },
+    {
+      "name": "S6",
+      "url": "https://example.com/?role=saas&debug=true",
+      "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "steps": [
+        {
+          "kind": "cut"
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_dep"
+        },
+        {
+          "kind": "cut"
+        }
+      ],
+      "receipts": [],
+      "edge": "bypass:cookie-only",
+      "setCookie": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22role%22%3A%5B%22saas%22%2C%22saas%22%5D%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "decisions": []
+    },
+    {
+      "name": "S7",
+      "url": "https://example.com/?role=saas",
+      "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22zZ9_-QkLmNoPqRsTuVwXyA%22%7D; rm_exclude=1",
+      "steps": [
+        {
+          "kind": "apply",
+          "actionId": "act_dep"
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_cta"
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_sub",
+          "versions": ["A"]
+        }
+      ],
+      "receipts": [
+        {
+          "actionId": "act_dep",
+          "targetId": "e1"
+        },
+        {
+          "actionId": "act_cta",
+          "targetId": "e2"
+        },
+        {
+          "actionId": "act_sub",
+          "targetId": "e1",
+          "versions": ["A"]
+        }
+      ],
+      "edge": "applied",
+      "setCookie": null,
+      "decisions": [
+        {
+          "campaignId": "cpn_deploy0001",
+          "variantId": "original",
+          "layer": "original",
+          "actionIds": ["act_dep"]
+        },
+        {
+          "campaignId": "cpn_opCBD8W3",
+          "variantId": "var_saas",
+          "layer": "audience",
+          "versionId": "A",
+          "actionIds": ["act_cta", "act_sub"]
+        }
+      ],
+      "text": {
+        "p.sub": "For SaaS teams"
+      }
+    },
+    {
+      "name": "S8",
+      "url": "https://example.com/?role=saas",
+      "cookie": "_rm_ctx=eyJ2IjoxLCJ2aWQiOiIzZjJiOGMxZS03YTQ0LTRkMGUtOWIxZi0yYzZhMGQ1ZThmNzEiLCJhYiI6eyJ2IjoxLCJyIjpbWyJhYnRfQWJDZEVmMDEyMzQ1OmFicl9BYkNkRWYwMTIzNDU2Nzg5Iix0cnVlLCJEIl1dfX0~",
+      "steps": [
+        {
+          "kind": "apply",
+          "actionId": "act_dep"
+        },
+        {
+          "kind": "claim",
+          "selector": "a.cta",
+          "slots": ["children"]
+        },
+        {
+          "kind": "claim",
+          "selector": "p.sub",
+          "slots": ["children"]
+        },
+        {
+          "kind": "claim",
+          "selector": "p.sub",
+          "slots": ["children"]
+        },
+        {
+          "kind": "claim",
+          "selector": ".badge",
+          "slots": ["class"]
+        }
+      ],
+      "receipts": [],
+      "edge": "bypass:cookie-only",
+      "setCookie": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22role%22%3A%5B%22saas%22%2C%22saas%22%5D%7D%2C%22r%22%3A%22%22%2C%22l%22%3A%22%2F%22%7D",
+      "decisions": []
+    },
+    {
+      "name": "S9",
+      "url": "https://example.com/?role=saas",
+      "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "plan": {
+        "version": 2,
+        "consent": "required"
+      },
+      "steps": [],
+      "receipts": [],
+      "edge": "bypass:consent",
+      "setCookie": null,
+      "decisions": [],
+      "bodyUnchanged": true
+    },
+    {
+      "name": "S9b",
+      "url": "https://example.com/?role=saas",
+      "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D; rm_consent=1",
+      "plan": {
+        "version": 2,
+        "consent": "required"
+      },
+      "steps": [
+        {
+          "kind": "apply",
+          "actionId": "act_oh1",
+          "versions": ["B"]
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_dep"
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_cta"
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_sub",
+          "versions": ["A"]
+        }
+      ],
+      "receipts": [
+        {
+          "actionId": "act_oh1",
+          "targetId": "e1",
+          "versions": ["B"]
+        },
+        {
+          "actionId": "act_dep",
+          "targetId": "e2"
+        },
+        {
+          "actionId": "act_cta",
+          "targetId": "e3"
+        },
+        {
+          "actionId": "act_sub",
+          "targetId": "e2",
+          "versions": ["A"]
+        }
+      ],
+      "edge": "applied",
+      "setCookie": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22role%22%3A%5B%22saas%22%2C%22saas%22%5D%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "decisions": [
+        {
+          "campaignId": "cpn_opCBD8W3",
+          "variantId": "original",
+          "layer": "original",
+          "versionId": "B",
+          "actionIds": ["act_oh1"]
+        },
+        {
+          "campaignId": "cpn_deploy0001",
+          "variantId": "original",
+          "layer": "original",
+          "actionIds": ["act_dep"]
+        },
+        {
+          "campaignId": "cpn_opCBD8W3",
+          "variantId": "var_saas",
+          "layer": "audience",
+          "versionId": "A",
+          "actionIds": ["act_cta", "act_sub"]
+        }
+      ],
+      "nextDecisions": [
+        {
+          "campaignId": "cpn_opCBD8W3",
+          "variantId": "var_saas",
+          "layer": "audience",
+          "versionId": "A",
+          "actionIds": ["act_cta", "act_sub"]
+        },
+        {
+          "campaignId": "cpn_opCBD8W3",
+          "variantId": "original",
+          "layer": "original",
+          "versionId": "B",
+          "actionIds": ["act_oh1"]
+        },
+        {
+          "campaignId": "cpn_deploy0001",
+          "variantId": "original",
+          "layer": "original",
+          "actionIds": ["act_dep"]
+        }
+      ],
+      "text": {
+        "h1": "Ship faster",
+        "p.sub": "For SaaS teams",
+        "a.cta": "Start your SaaS trial"
+      }
+    },
+    {
+      "name": "S9c",
+      "url": "https://example.com/?role=saas",
+      "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D; rm_consent=1; rm_consent=0",
+      "plan": {
+        "version": 2,
+        "consent": "required"
+      },
+      "steps": [],
+      "receipts": [],
+      "edge": "bypass:consent",
+      "setCookie": null,
+      "decisions": [],
+      "bodyUnchanged": true
+    }
+  ],
+  "envelopes": [
+    {
+      "name": "B1",
+      "case": "S1",
+      "browser": {
+        "unit": "AAAAAAAAAAAAAAAAAAAAAA",
+        "records": {}
+      },
+      "expected": {
+        "adopted": ["e1", "e2", "e3"],
+        "restored": [],
+        "disagreements": []
+      }
+    },
+    {
+      "name": "B2",
+      "case": "S1",
+      "browser": {
+        "unit": "AAAAAAAAAAAAAAAAAAAAAA",
+        "records": {
+          "abt_AbCdEf012345:abr_AbCdEf0123456789": "B"
+        }
+      },
+      "expected": {
+        "adopted": ["e1", "e3"],
+        "restored": [
+          {
+            "targetId": "e2",
+            "outerHTML": "<p class=\"sub\">For teams</p>"
+          }
+        ],
+        "disagreements": [
+          {
+            "campaignId": "cpn_opCBD8W3",
+            "variantId": "var_saas",
+            "actionId": "act_sub",
+            "reason": "version",
+            "edgeVersions": ["A"],
+            "browserVersion": "B"
+          }
+        ],
+        "text": {
+          "p.sub": "Built for SaaS"
+        }
+      }
+    },
+    {
+      "name": "B3",
+      "case": "S4",
+      "browser": {
+        "unit": "3f2b8c1e-7a44-4d0e-9b1f-2c6a0d5e8f71",
+        "records": {
+          "abt_AbCdEf012345:abr_AbCdEf0123456789": "A"
+        }
+      },
+      "expected": {
+        "adopted": ["e2"],
+        "restored": [
+          {
+            "targetId": "e1",
+            "outerHTML": "<p class=\"sub\">For teams</p>"
+          },
+          {
+            "targetId": "e3",
+            "outerHTML": "<span class=\"badge\">Beta</span>"
+          }
+        ],
+        "disagreements": [
+          {
+            "campaignId": "cpn_opCBD8W3",
+            "variantId": "var_saas",
+            "actionId": "act_sub",
+            "reason": "version",
+            "edgeVersions": ["B"],
+            "browserVersion": "A"
+          },
+          {
+            "campaignId": "cpn_opCBD8W3",
+            "variantId": "var_saas",
+            "actionId": "act_badge",
+            "reason": "identity"
+          }
+        ]
+      }
+    },
+    {
+      "name": "B4",
+      "case": "S1",
+      "browser": {
+        "unit": "AAAAAAAAAAAAAAAAAAAAAA",
+        "records": {
+          "abt_OrigHero0001:abr_OrigHero00000001": "A"
+        }
+      },
+      "expected": {
+        "adopted": ["e2", "e3"],
+        "restored": [
+          {
+            "targetId": "e1",
+            "outerHTML": "<h1>Ship it</h1>"
+          }
+        ],
+        "disagreements": [
+          {
+            "campaignId": "cpn_opCBD8W3",
+            "variantId": "original",
+            "actionId": "act_oh1",
+            "reason": "identity"
+          }
+        ]
+      }
+    },
+    {
+      "name": "B5",
+      "case": "S1",
+      "envelope": {
+        "revision": "other-revision"
+      },
+      "browser": {
+        "unit": "AAAAAAAAAAAAAAAAAAAAAA",
+        "records": {}
+      },
+      "expected": {
+        "adopted": [],
+        "restored": [
+          {
+            "targetId": "e1",
+            "outerHTML": "<h1>Ship it</h1>"
+          },
+          {
+            "targetId": "e2",
+            "outerHTML": "<p class=\"sub\">For teams</p>"
+          },
+          {
+            "targetId": "e3",
+            "outerHTML": "<a class=\"cta\" href=\"/trial\">Start trial</a>"
+          }
+        ],
+        "disagreements": [
+          {
+            "reason": "revision"
+          }
+        ]
+      }
+    },
+    {
+      "name": "B6",
+      "case": "S1",
+      "envelope": {
+        "withoutVersions": "act_sub"
+      },
+      "browser": {
+        "unit": "AAAAAAAAAAAAAAAAAAAAAA",
+        "records": {}
+      },
+      "expected": {
+        "adopted": ["e1", "e3"],
+        "restored": [
+          {
+            "targetId": "e2",
+            "outerHTML": "<p class=\"sub\">For teams</p>"
+          }
+        ],
+        "disagreements": [
+          {
+            "campaignId": "cpn_opCBD8W3",
+            "variantId": "var_saas",
+            "actionId": "act_sub",
+            "reason": "version",
+            "browserVersion": "A"
+          }
+        ]
+      }
+    }
+  ],
+  "touch": [
+    {
+      "name": "T1",
+      "header": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22l%22%3A%22%2Fpricing%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "queryNames": [],
+      "url": "https://example.com/about",
+      "referrer": "",
+      "value": "%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22l%22%3A%22%2Fpricing%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "changed": false
+    },
+    {
+      "name": "T2",
+      "header": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22l%22%3A%22%2Fpricing%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "queryNames": ["role"],
+      "url": "https://example.com/?role=saas",
+      "referrer": "",
+      "value": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22role%22%3A%5B%22saas%22%2C%22saas%22%5D%7D%2C%22r%22%3A%22%22%2C%22l%22%3A%22%2Fpricing%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "changed": true
+    },
+    {
+      "name": "T3",
+      "header": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22l%22%3A%22%2Fpricing%22%2C%22x%22%3A7%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "queryNames": ["role"],
+      "url": "https://example.com/?role=saas",
+      "referrer": "",
+      "value": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22role%22%3A%5B%22saas%22%2C%22saas%22%5D%7D%2C%22r%22%3A%22%22%2C%22l%22%3A%22%2Fpricing%22%2C%22x%22%3A7%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "changed": true
+    },
+    {
+      "name": "T4",
+      "header": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22l%22%3A%22%2Fpricing%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "queryNames": ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m"],
+      "url": "https://example.com/?a=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&b=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&c=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&d=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&e=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&f=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&g=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&h=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&i=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&j=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&k=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&l=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv&m=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+      "referrer": "",
+      "value": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22a%22%3A%5B%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%2C%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%5D%2C%22b%22%3A%5B%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%2C%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%5D%2C%22c%22%3A%5B%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%2C%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%5D%2C%22d%22%3A%5B%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%2C%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%5D%2C%22e%22%3A%5B%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%2C%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%5D%2C%22f%22%3A%5B%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%2C%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%5D%2C%22g%22%3A%5B%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%2C%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%5D%2C%22h%22%3A%5B%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%2C%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%5D%2C%22i%22%3A%5B%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%2C%22vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv%22%5D%7D%2C%22r%22%3A%22%22%2C%22l%22%3A%22%2Fpricing%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "changed": true,
+      "dropped": ["m", "l", "k", "j"]
+    }
+  ],
+  "ladder": {
+    "config": {
+      "dimensions": [],
+      "campaigns": [
+        {
+          "id": "P",
+          "is_active": true,
+          "testing": {
+            "is_enabled": false,
+            "withhold": 0
+          },
+          "variants": [
+            {
+              "id": "var_P",
+              "rules": {
+                "all": [
+                  {
+                    "$source": "query",
+                    "$type": "custom",
+                    "query": "role",
+                    "occurrence": "current",
+                    "operator": "equals",
+                    "value": "saas"
+                  }
+                ]
+              },
+              "actions": [
+                {
+                  "id": "act_P",
+                  "$type": "MODIFY_ELEMENT",
+                  "page": [
+                    {
+                      "domain": "*",
+                      "path": "*"
+                    }
+                  ],
+                  "selector": ".p",
+                  "modifications": {
+                    "text": "Copy for P"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "H",
+          "is_active": true,
+          "testing": {
+            "is_enabled": true,
+            "withhold": 20
+          },
+          "variants": [
+            {
+              "id": "var_H",
+              "rules": {
+                "all": [
+                  {
+                    "$source": "query",
+                    "$type": "custom",
+                    "query": "role",
+                    "occurrence": "current",
+                    "operator": "equals",
+                    "value": "saas"
+                  }
+                ]
+              },
+              "actions": [
+                {
+                  "id": "act_H",
+                  "$type": "MODIFY_ELEMENT",
+                  "page": [
+                    {
+                      "domain": "*",
+                      "path": "*"
+                    }
+                  ],
+                  "selector": ".h",
+                  "modifications": {
+                    "text": "Copy for H"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "T",
+          "is_active": true,
+          "testing": {
+            "is_enabled": false,
+            "withhold": 0
+          },
+          "variants": [
+            {
+              "id": "var_T",
+              "rules": {
+                "all": [
+                  {
+                    "$source": "query",
+                    "$type": "custom",
+                    "query": "role",
+                    "occurrence": "current",
+                    "operator": "equals",
+                    "value": "saas"
+                  }
+                ]
+              },
+              "actions": [
+                {
+                  "id": "act_T",
+                  "$type": "MODIFY_ELEMENT",
+                  "page": [
+                    {
+                      "domain": "*",
+                      "path": "*"
+                    }
+                  ],
+                  "selector": ".t",
+                  "modifications": {
+                    "text": "Copy for T"
+                  }
+                }
+              ],
+              "test": {
+                "id": "abt_Ladder000001",
+                "state": "running",
+                "run": "abr_Ladder0000000001",
+                "versions": [
+                  {
+                    "id": "A",
+                    "name": "Control",
+                    "weight": 50
+                  },
+                  {
+                    "id": "B",
+                    "name": "Variant A",
+                    "weight": 50,
+                    "overrides": [
+                      {
+                        "actionId": "act_T",
+                        "fields": [
+                          {
+                            "path": ["text"],
+                            "op": "set",
+                            "value": "Other copy for T"
+                          }
+                        ]
+                      }
+                    ],
+                    "actions": []
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "rungs": [
+      {
+        "bytes": 2081,
+        "demoted": []
+      },
+      {
+        "bytes": 1907,
+        "demoted": ["T"]
+      },
+      {
+        "bytes": 1817,
+        "demoted": ["T", "H"]
+      },
+      {
+        "bytes": 88,
+        "demoted": ["T", "H", "P"]
+      }
+    ],
+    "floor": "{\"campaigns\":[],\"dimensions\":[],\"queryNames\":[\"role\"],\"teamPid\":\"demo-team\",\"version\":1}"
+  }
+}
