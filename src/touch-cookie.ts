@@ -2,7 +2,7 @@ import { HOLDOUT_UNIT_PATTERN, mintHoldoutUnit } from './holdout.js';
 
 export const TOUCH_COOKIE_NAME = '__Host-rm_touch';
 export const TOUCH_COOKIE_MAX_BYTES = 1024;
-export interface TouchState { v?: 1; q: Record<string, [string, string]>; r?: string; u?: string }
+export interface TouchState { v?: 1; q: Record<string, [string, string]>; r?: string; l?: string; u?: string }
 export interface TouchPage { query?: Record<string, unknown>; _queryValuesDecoded?: boolean; referrer?: string }
 export interface TouchObservation { state: TouchState; value: string; cookie: string; changed: boolean }
 const namesFor = (queryNames: readonly string[]): string[] => [...new Set(queryNames.filter((name) => typeof name === 'string' && name !== '_rm_ctx'))].sort();
@@ -11,6 +11,17 @@ const cookieValue = (header: string): string | null => {
   const prefix = `${TOUCH_COOKIE_NAME}=`;
   const entry = String(header || '').split(';').map((part) => part.trim()).find((part) => part.startsWith(prefix));
   return entry === undefined ? null : entry.slice(prefix.length);
+};
+const MAX_LANDING_PATH = 256;
+// A pathname only. Query, hash, and control characters are not a landing path; rejecting
+// them keeps a tampered cookie unknown instead of comparable.
+const validLandingPath = (value: unknown): value is string => {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.length > MAX_LANDING_PATH) return false;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code <= 31 || code === 127 || value[index] === '?' || value[index] === '#' || value[index] === '\\') return false;
+  }
+  return true;
 };
 const validHostname = (hostname: unknown): hostname is string => {
   if (typeof hostname !== 'string' || !hostname) return false;
@@ -42,7 +53,7 @@ export function decodeTouchCookie(header: string, queryNames: readonly string[])
       const pair = Object.hasOwn(source, name) ? source[name] : null;
       return Array.isArray(pair) && pair.length === 2 && pair.every((item: unknown) => typeof item === 'string') ? [[name, pair as [string, string]]] : [];
     }));
-    return { v: 1, q, ...(state.r === '' || validHostname(state.r) ? { r: state.r } : {}), ...(typeof state.u === 'string' && HOLDOUT_UNIT_PATTERN.test(state.u) ? { u: state.u } : {}) };
+    return { v: 1, q, ...(state.r === '' || validHostname(state.r) ? { r: state.r } : {}), ...(validLandingPath(state.l) ? { l: state.l } : {}), ...(typeof state.u === 'string' && HOLDOUT_UNIT_PATTERN.test(state.u) ? { u: state.u } : {}) };
   } catch { return emptyState(); }
 }
 
@@ -57,8 +68,10 @@ const queryOf = (page: TouchPage | null | undefined): Record<string, unknown> =>
 };
 
 /**
- * Retain first/last observed allowlisted values and the first referrer hostname. `unit` is the
- * holdout unit to record when the cookie has none; an existing unit is never replaced.
+ * Retain first/last observed allowlisted values, the first referrer hostname, and the first
+ * observed pathname. `unit` is the holdout unit to record when the cookie has none; an existing
+ * unit is never replaced. `l` is recorded only when the request has no touch cookie: that
+ * pathname is the landing page. A cookie that omits `l` is not backfilled from the current URL.
  */
 export function observeTouchCookie(header: string, queryNames: readonly string[], location: string | URL, referrer: string, firstPage: TouchPage | null = null, pages: readonly TouchPage[] = [], unit?: string): TouchObservation {
   const previous = cookieValue(header);
@@ -84,15 +97,20 @@ export function observeTouchCookie(header: string, queryNames: readonly string[]
     } catch {}
   }
   if (!state.u && unit !== undefined && HOLDOUT_UNIT_PATTERN.test(unit)) state.u = unit;
-  // Canonical key order keeps edge- and browser-written values byte-identical.
-  const encode = () => encodeURIComponent(JSON.stringify({ v: 1, q: state.q, ...(Object.hasOwn(state, 'r') ? { r: state.r } : {}), ...(state.u ? { u: state.u } : {}) }));
+  // No incoming cookie means this request is the landing page. A later cookie without `l`
+  // (an older writer, or the browser tag rewriting known keys only) must not adopt the current path.
+  if (previous === null && !Object.hasOwn(state, 'l') && validLandingPath(url.pathname)) state.l = url.pathname;
+  // `v, q, r, u` stays byte-identical with the browser when `l` is absent. `l` sits between `r` and `u`.
+  const encode = () => encodeURIComponent(JSON.stringify({ v: 1, q: state.q, ...(Object.hasOwn(state, 'r') ? { r: state.r } : {}), ...(Object.hasOwn(state, 'l') ? { l: state.l } : {}), ...(state.u ? { u: state.u } : {}) }));
   let value = encode();
   const remaining = Object.keys(state.q).sort();
   while (TOUCH_COOKIE_NAME.length + 1 + value.length > TOUCH_COOKIE_MAX_BYTES) {
     const name = remaining.pop();
     if (name !== undefined) delete state.q[name];
-    else delete state.r;
+    else if (Object.hasOwn(state, 'r')) delete state.r;
+    else if (Object.hasOwn(state, 'l')) delete state.l;
+    else break;
     value = encode();
   }
-  return { state, value, cookie: `${TOUCH_COOKIE_NAME}=${value}; Secure; Path=/; SameSite=Lax`, changed: previous !== null ? previous !== value : Object.keys(state.q).length > 0 || Object.hasOwn(state, 'r') };
+  return { state, value, cookie: `${TOUCH_COOKIE_NAME}=${value}; Secure; Path=/; SameSite=Lax`, changed: previous !== null ? previous !== value : Object.keys(state.q).length > 0 || Object.hasOwn(state, 'r') || Object.hasOwn(state, 'l') };
 }

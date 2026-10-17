@@ -75,7 +75,7 @@ test("the touch cookie records a minted unit once, keeps it, and orders keys can
   assert.match(unit, /^[A-Za-z0-9_-]{22}$/);
   assert.notEqual(unit, mintHoldoutUnit());
   const first = observeTouchCookie("", ["biz"], "https://example.com/?biz=saas", "", null, [], unit);
-  assert.equal(decodeURIComponent(first.value), `{"v":1,"q":{"biz":["saas","saas"]},"r":"","u":"${unit}"}`);
+  assert.equal(decodeURIComponent(first.value), `{"v":1,"q":{"biz":["saas","saas"]},"r":"","l":"/","u":"${unit}"}`);
   const next = observeTouchCookie(first.cookie, ["biz"], "https://example.com/pricing", "https://other.example/", null, [], mintHoldoutUnit());
   assert.equal(next.state.u, unit);
   assert.equal(next.changed, false);

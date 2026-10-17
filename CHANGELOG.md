@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- Anonymous `pageviews` / `landingpage` rules are decided from the first observed pathname. A request with no `__Host-rm_touch` cookie records that pathname as `l` and compares it with the same path rules as the current page, so a later single-winning segment can win when an earlier segment's landing pages do not match. A cookie without `l` still leaves those leaves unknown. Identified contacts keep using recorded snapshot outcomes and do not fall back to `l`.
+- `__Host-rm_touch` key order is `v, q, r, l, u`. `l` is omitted when unknown, so a browser rewrite that does not know `l` stays byte-identical with the previous contract.
+
 ## 0.2.1
 
 - A debugger request (last `debug` query value `true` or `yes`) takes the treatment arm of every tested campaign, including over a recorded or assigned holdout, matching the browser debugger. New export: `debugForcesTreatment`.

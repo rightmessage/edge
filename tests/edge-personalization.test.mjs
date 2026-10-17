@@ -358,7 +358,7 @@ test("a snapshot is honored up to 30 days old and ignored when older, future-dat
 });
 
 test("a recorded landing-page outcome lets an identified contact's later segment win, on its own origin only", () => {
-  // SaaS also matches a landing page, which the edge cannot see in the request.
+  // SaaS also matches a landing page. An identified contact uses the snapshot, not the request path.
   const withLanding = structuredClone(mixedSignalPlan);
   withLanding.dimensions[0].signals[0].definition.or.push({ and: [{ $source: "pageviews", $type: "landingpage", operator: "equals", value: "/integrations/kit", edge: { supported: false, reason: "browser-signal", key: "Land0001" } }] });
   const actions = (options, biz) => evaluatePlan(withLanding, new Request(`https://rightmessage.com/?biz=${biz}`, { headers: { cookie: identifiedCookie(options) } }), { q: { biz: [biz, biz] } }).map(item => item.actionId);
@@ -369,9 +369,73 @@ test("a recorded landing-page outcome lets an identified contact's later segment
   // `_rm_ctx` is shared across subdomains, but landing-page history is per origin.
   assert.deepEqual(actions({ outcomes: esp, page: { Land0001: false }, origin: "https://blog.rightmessage.com" }, "ecommerce"), []);
   assert.deepEqual(actions({ outcomes: esp, page: { Land0001: false }, origin: "https://rightmessage.com:8443" }, "ecommerce"), []);
-  // Anonymous visitors keep the landing page unknown, exactly as before.
-  const anonymous = evaluatePlan(withLanding, new Request("https://rightmessage.com/?biz=ecommerce"), { q: { biz: ["ecommerce", "ecommerce"] } });
+  // An identified contact does not fall back to the touch landing path when the snapshot omitted the key.
+  const identifiedWithLanding = evaluatePlan(withLanding, new Request("https://rightmessage.com/?biz=ecommerce", { headers: { cookie: identifiedCookie({ outcomes: esp }) } }), { q: { biz: ["ecommerce", "ecommerce"] }, r: "", l: "/" });
+  assert.deepEqual(identifiedWithLanding, []);
+  // No recorded landing path: the current URL is not the first page, so the leaf stays unknown.
+  const anonymous = evaluatePlan(withLanding, new Request("https://rightmessage.com/?biz=ecommerce"), { q: { biz: ["ecommerce", "ecommerce"] }, r: "" });
   assert.deepEqual(anonymous, []);
+  // A recorded landing path that is not this rule lets the later query win. The rule's own path wins instead.
+  const touch = (l) => ({ q: { biz: ["ecommerce", "ecommerce"] }, r: "", l });
+  assert.deepEqual(evaluatePlan(withLanding, new Request("https://rightmessage.com/?biz=ecommerce"), touch("/")).map(item => item.actionId), ["action_ecommerce"]);
+  assert.deepEqual(evaluatePlan(withLanding, new Request("https://rightmessage.com/use-cases/saas?biz=ecommerce"), touch("/integrations/kit")).map(item => item.actionId), ["action_saas"]);
+  assert.deepEqual(evaluatePlan(withLanding, new Request("https://rightmessage.com/pricing"), touch("/integrations/kit/")).map(item => item.actionId), ["action_saas"]);
+});
+
+test("a cookieless ad landing renders the later business and ESP segments and keeps that landing path", async () => {
+  const withLanding = structuredClone(mixedSignalPlan);
+  const leaf = (value, key) => ({ and: [{ $source: "pageviews", $type: "landingpage", operator: "equals", value, edge: { supported: false, reason: "browser-signal", key } }] });
+  withLanding.dimensions[0].signals[0].definition.or.push(leaf("/use-cases/saas", "SaasLand"));
+  withLanding.dimensions[0].signals[1].definition.or.push(leaf("/use-cases/ecommerce", "EcomLand"));
+  withLanding.queryNames = ["biz", "esp"];
+  withLanding.dimensions.push({
+    id: "email-platform",
+    isMultiWinning: false,
+    segments: [{ id: "activecampaign" }, { id: "klaviyo" }],
+    signals: [
+      { indicates: "activecampaign", definition: { or: [{ and: [{ $source: "query", query: "esp", occurrence: "last touch", operator: "equals", value: "activecampaign", edge: { supported: true, reason: null } }] }, leaf("/integrations/activecampaign", "AcmeLand")] }, edge: { supported: false, reason: "browser-signal" } },
+      { indicates: "klaviyo", definition: { or: [{ and: [{ $source: "query", query: "esp", occurrence: "last touch", operator: "equals", value: "klaviyo", edge: { supported: true, reason: null } }] }, leaf("/integrations/klaviyo", "KlavLand")] }, edge: { supported: false, reason: "browser-signal" } },
+    ],
+  });
+  withLanding.campaigns.push({
+    id: "campaign_klaviyo",
+    is_active: true,
+    variants: [{
+      id: "variant_klaviyo",
+      rules: { all: [{ dimensionId: "email-platform", segment: "klaviyo" }] },
+      actions: [{ id: "action_klaviyo", actionId: "action_klaviyo", campaignId: "campaign_klaviyo", variantId: "variant_klaviyo", $type: "MODIFY_ELEMENT", selector: "[data-rm-esp-copy]", page: [{ domain: "*", path: "/*" }], modifications: { text: "your Klaviyo account" }, edge: { supported: true, reason: null, operations: ["text"], deferredOperations: [] } }],
+    }],
+  });
+  const html = '<html><head></head><body><h1>Make the website you already have</h1><span data-rm-esp-copy="esp-crm">your ESP or CRM</span></body></html>';
+  const first = await run({ html, plan: withLanding, url: "https://rightmessage.com/website-personalization?biz=ecommerce&esp=klaviyo" });
+  assert.equal(first.headers["x-rm-edge"], "applied");
+  assert.match(first.html, />Ecommerce<\/h1>/);
+  assert.match(first.html, />your Klaviyo account<\/span>/);
+  const raw = decodeURIComponent(first.setCookies.find(value => value.startsWith("__Host-rm_touch=")).split(";")[0].slice("__Host-rm_touch=".length));
+  assert.match(raw, /"l":"\/website-personalization"/);
+  const cookie = first.setCookies.find(value => value.startsWith("__Host-rm_touch=")).split(";")[0];
+  const next = await run({ html, plan: withLanding, url: "https://rightmessage.com/pricing", requestHeaders: { cookie } });
+  assert.match(next.html, />Ecommerce<\/h1>/);
+  assert.match(next.html, />your Klaviyo account<\/span>/);
+  const strippedState = JSON.parse(raw);
+  delete strippedState.l;
+  const stripped = `__Host-rm_touch=${encodeURIComponent(JSON.stringify(strippedState))}`;
+  const blocked = await run({ html, plan: withLanding, url: "https://rightmessage.com/?biz=ecommerce&esp=klaviyo", requestHeaders: { cookie: stripped } });
+  assert.match(blocked.headers["x-rm-edge"], /^bypass:/);
+  assert.match(blocked.html, /Make the website you already have/);
+  assert.match(blocked.html, /your ESP or CRM/);
+  const useCase = await run({ html, plan: withLanding, url: "https://rightmessage.com/use-cases/ecommerce" });
+  assert.match(useCase.html, />Ecommerce<\/h1>/);
+  assert.doesNotMatch(useCase.html, /your Klaviyo account/);
+  const integration = await run({ html, plan: withLanding, url: "https://rightmessage.com/integrations/klaviyo" });
+  assert.match(integration.html, />your Klaviyo account<\/span>/);
+  assert.match(integration.html, /Make the website you already have/);
+  const conflict = await run({ html, plan: withLanding, url: "https://rightmessage.com/use-cases/saas?biz=ecommerce&esp=klaviyo" });
+  assert.match(conflict.html, />SaaS<\/h1>/);
+  assert.match(conflict.html, />your Klaviyo account<\/span>/);
+  const generic = await run({ html, plan: withLanding, url: "https://rightmessage.com/" });
+  assert.equal(generic.headers["x-rm-edge"], "bypass:cookie-only");
+  assert.match(generic.html, /Make the website you already have/);
 });
 
 test("a snapshot never changes anonymous visitors or contacts from another project", () => {

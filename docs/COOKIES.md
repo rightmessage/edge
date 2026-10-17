@@ -45,10 +45,12 @@ The browser omits `es` whenever including it would push `_rm_ctx` beyond 3,500 e
 `decodeTouchCookie(header, queryNames)` and `observeTouchCookie(header, queryNames, location, referrer, firstPage?, pages?)` share this URI-encoded JSON contract:
 
 ```json
-{"v":1,"q":{"source":["first value","last value"]},"r":"search.example","u":"AAAAAAAAAAAAAAAAAAAAAA"}
+{"v":1,"q":{"source":["first value","last value"]},"r":"search.example","l":"/pricing","u":"AAAAAAAAAAAAAAAAAAAAAA"}
 ```
 
-`u` is a 22-character base64url holdout unit (128 random bits). `personalizeResponse` mints it with `mintHoldoutUnit()` only when the request has neither this cookie nor `_rm_ctx`, which identifies a visitor whose browser holds no arms yet. `observeTouchCookie(..., unit)` records it only when the cookie has no valid `u`, and never replaces one. The browser preserves `u` but never mints it. Both writers serialize keys in `v, q, r, u` order. Invalid units are dropped on decode.
+`u` is a 22-character base64url holdout unit (128 random bits). `personalizeResponse` mints it with `mintHoldoutUnit()` only when the request has neither this cookie nor `_rm_ctx`, which identifies a visitor whose browser holds no arms yet. `observeTouchCookie(..., unit)` records it only when the cookie has no valid `u`, and never replaces one. The browser preserves `u` but never mints it. Writers serialize keys in `v, q, r, l, u` order. `l` is omitted when unknown, so a cookie without it stays byte-identical with the browser's `v, q, r, u` order. Invalid units are dropped on decode.
+
+`l` is the first observed pathname, used to decide `pageviews` / `landingpage` rules. It is set only when the request has no `__Host-rm_touch` cookie: that pathname is the landing page. A cookie that already exists but has no `l` is not backfilled from the current URL. The value must be a pathname of at most 256 characters, starting with `/`, with no `?`, `#`, backslash, or control character; anything else is dropped and the landing page stays unknown. The current browser tag rewrites this cookie from the keys it knows (`v`, `q`, `r`, `u`) and drops `l`. After that rewrite, landing-page leaves are unknown again until a cookieless request records a new `l`.
 
 Only allowlisted query names are retained. Names are deduplicated and sorted; `_rm_ctx` is always excluded. Each retained value is a pair of strings. Duplicate current query parameters use their last decoded value. An observed empty string is a value, not absence. A first/last-touch name absent from the cookie has no observed pageview and matches no operator, including negative operators.
 
@@ -56,7 +58,7 @@ Optional retained browser pageviews seed missing names from their first and last
 
 `r` contains only the first observed referrer hostname, never its path, query, or fragment. An own `r: ""` explicitly records a direct or same-host first touch and survives later referrers. Missing `r` means unobserved or evicted, so referrer rules remain unknown. Referrer URLs must be HTTP(S), and retained hostnames must be canonical valid hostnames. Same-host comparison is exact, not registrable-domain-wide.
 
-The full encoded cookie name/value is bounded to **1,024 UTF-8 bytes**. Oversized incoming cookies are discarded. Writers evict whole query fields in reverse lexicographic name order, then the referrer if necessary. URI encoding makes written values ASCII, so this bound also holds for Unicode inputs. Retired allowlist names disappear on the next observation.
+The full encoded cookie name/value is bounded to **1,024 UTF-8 bytes**. Oversized incoming cookies are discarded. Writers evict whole query fields in reverse lexicographic name order, then the referrer, then the landing path, if necessary. The holdout unit is not evicted. URI encoding makes written values ASCII, so this bound also holds for Unicode inputs. Retired allowlist names disappear on the next observation.
 
 The returned observation is `{state, value, cookie, changed}`. `cookie` includes exactly `Secure; Path=/; SameSite=Lax`, with no Domain, HttpOnly, or persistent expiry. Its `__Host-` prefix makes it host-only, unlike `_rm_ctx`. A changed cookie is appended by the response integration; unchanged observations need no Set-Cookie. Responses carrying a new touch observation are private/no-store. Failed plan loads do not guess an allowlist or update the cookie.
 

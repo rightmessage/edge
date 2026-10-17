@@ -110,7 +110,7 @@ There is an intentional evaluator distinction for empty groups: generic rule-tre
 | `segments` | Dimension membership. Compare known and possible memberships; disagreement means unknown. |
 | `query`, `utm` | Named query values (`query` for `query`, `$type` for `utm`); occurrences `current`, `last`, `first touch`, `last touch`. |
 | `currentpage` | `$type: "path"` against the current pathname. |
-| `pageviews` | Current/last path or query; first/last-touch query. Other pageview history remains browser work. |
+| `pageviews` | Current/last path or query; first/last-touch query; `landingpage` when the touch cookie has recorded the first pathname (`l`). Other pageview history remains browser work. |
 | `referrer` | `domain`, `direct`, or `referral` using the first observed referrer hostname. Referrer paths are not retained. |
 | `location` | `country` and `city` from adapter-supplied `request.cf` facts. |
 | `date` | `date`, `weekday`, and zero-based `month` using `request.cf.timezone`; missing/invalid timezone means unknown. |
@@ -122,12 +122,14 @@ Scalar comparisons include `equals`, `does not equal`, `is set`, `is not set`, `
 
 Current query values are URL-decoded; duplicate names use their last value. First/last-touch values come from `__Host-rm_touch`, retaining only `queryNames`. An absent first/last-touch query name means no observed pageview and evaluates false even for negative operators; an observed empty value is still compared. An own empty referrer value records direct traffic, whereas an absent referrer is unknown.
 
+`pageviews` / `landingpage` is the visitor's first page path, the same rule the browser rewrites to `pageviews` path occurrence `first`. The edge compares `__Host-rm_touch` field `l` with the current-page path criterion. `observeTouchCookie` sets `l` to the request pathname only when the request has no touch cookie, because that request is the landing page. A cookie that omits `l` leaves the leaf unknown; the current URL is not treated as an earlier landing. A timeframe other than `ever` stays unknown. An unknown higher-priority landing page still blocks a later single-winning segment. A recorded `l` that does not match is false, so a later segment that is definitely true can win.
+
 ### Browser-backed leaves and snapshots
 
 Leaf `edge` metadata contains `supported`, `reason`, and sometimes `key`. Signal reasons are `integration-signal`, `browser-history`, and `browser-signal`; supported leaves have `reason: null`.
 
-- Without a scoped contact identity, an `integration-signal` leaf is evaluated against the browser's anonymous empty profile where supported: no custom fields, tags, lists, purchases, or events, revenue zero, anonymous true, subscriber false. Negative membership/unset checks can therefore be true. Unrecognized integration types remain unknown.
-- For an identified contact, unsupported leaves can use the browser's recorded boolean in `_rm_ctx.es` under `edge.key`. Missing or invalid recorded state stays unknown.
+- Without a scoped contact identity, an `integration-signal` leaf is evaluated against the browser's anonymous empty profile where supported: no custom fields, tags, lists, purchases, or events, revenue zero, anonymous true, subscriber false. Negative membership/unset checks can therefore be true. Unrecognized integration types remain unknown. An anonymous `landingpage` leaf uses `l`, as described above, including when the compiler marked it `supported: false` with reason `browser-signal`.
+- For an identified contact, unsupported leaves can use the browser's recorded boolean in `_rm_ctx.es` under `edge.key`. Missing or invalid recorded state stays unknown. A `landingpage` leaf uses that snapshot outcome only and does not fall back to `l`.
 - Keys are eight-character, URL-safe, content-derived strings, **not** eight hexadecimal digits. Eligible integration leaves without finite history windows and landing-page leaves can carry them. Changed leaves get new keys; compiler-detected key collisions lose their keys rather than share ambiguous outcomes.
 - Snapshot version `1` records profile true/false key lists (`t`/`f`) bound by `b` to project, connection, and contact. Landing-page lists (`ht`/`hf`) additionally require `h` to match the request origin. `d` is the UTC day of the profile read; future, missing, or more-than-30-day-old dates are invalid. Conflicting true/false entries are unknown.
 - The cookie's project/connection identity must agree with the plan and `connectionScope`. An absent scope cannot authorize snapshot-backed decisions. These cookies are personalization hints, not authentication or authorization evidence.
