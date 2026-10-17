@@ -7,13 +7,20 @@ const bytes = (cookie) => new TextEncoder().encode(cookie.split(";")[0]).length;
 
 test("edge and browser use the same versioned host-only touch-cookie wire contract", () => {
   const result = observeTouchCookie("", ["biz"], "https://example.com/?biz=saas", "https://www.search.example/path?q=private");
-  assert.deepEqual(result.state, { v: 1, q: { biz: ["saas", "saas"] }, r: "www.search.example" });
-  assert.equal(result.value, "%7B%22v%22%3A1%2C%22q%22%3A%7B%22biz%22%3A%5B%22saas%22%2C%22saas%22%5D%7D%2C%22r%22%3A%22www.search.example%22%7D");
+  assert.deepEqual(result.state, { v: 1, q: { biz: ["saas", "saas"] }, r: "www.search.example", l: "/" });
+  assert.equal(result.value, "%7B%22v%22%3A1%2C%22q%22%3A%7B%22biz%22%3A%5B%22saas%22%2C%22saas%22%5D%7D%2C%22r%22%3A%22www.search.example%22%2C%22l%22%3A%22%2F%22%7D");
   assert.equal(result.cookie, `${TOUCH_COOKIE_NAME}=${result.value}; Secure; Path=/; SameSite=Lax`);
   assert.deepEqual(decodeTouchCookie(`other=1; ${result.cookie}`, ["biz"]), result.state);
   const second = observeTouchCookie(result.cookie, ["biz"], "https://example.com/pricing?biz=services", "https://second.example/");
-  assert.deepEqual(second.state, { v: 1, q: { biz: ["saas", "services"] }, r: "www.search.example" });
+  assert.deepEqual(second.state, { v: 1, q: { biz: ["saas", "services"] }, r: "www.search.example", l: "/" });
   assert.equal(observeTouchCookie(second.cookie, ["biz"], "https://example.com/pricing", "").changed, false);
+  // The browser tag rewrites known keys only. That cookie must stay byte-identical and must not
+  // adopt the current path as a landing page.
+  const browser = header({ v: 1, q: { biz: ["saas", "services"] }, r: "www.search.example" });
+  const kept = observeTouchCookie(browser, ["biz"], "https://example.com/pricing", "");
+  assert.deepEqual(kept.state, { v: 1, q: { biz: ["saas", "services"] }, r: "www.search.example" });
+  assert.equal(kept.changed, false);
+  assert.equal(decodeURIComponent(kept.value), '{"v":1,"q":{"biz":["saas","services"]},"r":"www.search.example"}');
 });
 
 test("encoded name and value retain 1024 bytes and evict whole fields at 1025", () => {
@@ -33,9 +40,9 @@ test("live dependencies, Unicode eviction, and excluded hard context are determi
   const first = observeTouchCookie("", ["z", "_rm_ctx", "a"], url, "https://first.example/");
   const second = observeTouchCookie("", ["a", "z", "a"], url, "https://first.example/");
   assert.equal(first.value, second.value);
-  assert.deepEqual(first.state, { v: 1, q: { a: ["keep", "keep"] }, r: "first.example" });
+  assert.deepEqual(first.state, { v: 1, q: { a: ["keep", "keep"] }, r: "first.example", l: "/" });
   const retired = observeTouchCookie(first.cookie, [], "https://example.com/", "");
-  assert.deepEqual(retired.state, { v: 1, q: {}, r: "first.example" });
+  assert.deepEqual(retired.state, { v: 1, q: {}, r: "first.example", l: "/" });
   assert.equal(retired.changed, true);
 });
 
@@ -53,8 +60,8 @@ test("repeated query parameters match browser last-value semantics", () => {
 test("direct first touch remains explicit after same-site and external navigation", () => {
   const direct = observeTouchCookie("", ["biz"], "https://example.com/", "");
   assert.equal(direct.changed, true);
-  assert.deepEqual(direct.state, { v: 1, q: {}, r: "" });
-  assert.equal(direct.value, "%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%7D");
+  assert.deepEqual(direct.state, { v: 1, q: {}, r: "", l: "/" });
+  assert.equal(direct.value, "%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22l%22%3A%22%2F%22%7D");
   assert.deepEqual(decodeTouchCookie(direct.cookie, ["biz"]), direct.state);
   for (const referrer of ["https://example.com/", "https://search.example/"]) {
     const next = observeTouchCookie(direct.cookie, ["biz"], "https://example.com/pricing", referrer);
@@ -65,7 +72,7 @@ test("direct first touch remains explicit after same-site and external navigatio
 
 test("a same-site navigation without an existing cookie records a direct first touch", () => {
   const result = observeTouchCookie("", [], "https://example.com/pricing", "https://example.com/");
-  assert.deepEqual(result.state, { v: 1, q: {}, r: "" });
+  assert.deepEqual(result.state, { v: 1, q: {}, r: "", l: "/pricing" });
 });
 
 test("stored pageview history seeds first-touch values before current observations", () => {
@@ -76,7 +83,7 @@ test("stored pageview history seeds first-touch values before current observatio
     "https://example.com/",
     { query: { biz: "saas" }, referrer: "https://search.example/landing" },
   );
-  assert.deepEqual(result.state, { v: 1, q: { biz: ["saas", "services"] }, r: "search.example" });
+  assert.deepEqual(result.state, { v: 1, q: { biz: ["saas", "services"] }, r: "search.example", l: "/pricing" });
 });
 
 test("stored history seeds first and last touch from every retained pageview", () => {
@@ -88,7 +95,19 @@ test("stored history seeds first and last touch from every retained pageview", (
     { query: {}, referrer: "https://search.example/landing" },
     [{ query: { biz: "saas" } }, { query: {} }, { query: { biz: "creator" } }],
   );
-  assert.deepEqual(result.state, { v: 1, q: { biz: ["saas", "creator"] }, r: "search.example" });
+  assert.deepEqual(result.state, { v: 1, q: { biz: ["saas", "creator"] }, r: "search.example", l: "/about" });
+});
+
+test("the first cookieless pathname is the landing path and later requests keep it", () => {
+  const first = observeTouchCookie("", ["biz"], "https://example.com/use-cases/saas/?biz=ecommerce", "");
+  assert.equal(first.state.l, "/use-cases/saas/");
+  const next = observeTouchCookie(first.cookie, ["biz"], "https://example.com/pricing", "https://example.com/use-cases/saas/");
+  assert.equal(next.state.l, "/use-cases/saas/");
+  assert.equal(next.changed, false);
+  for (const landing of ["use-cases/saas", "https://example.com/use-cases/saas", "/use-cases/saas?biz=ecommerce", `/${"a".repeat(256)}`, "/ok\n"]) {
+    assert.equal(decodeTouchCookie(header({ v: 1, q: {}, l: landing }), []).l, undefined, landing);
+  }
+  assert.equal(decodeTouchCookie(header({ v: 1, q: {}, l: "/use-cases/saas" }), []).l, "/use-cases/saas");
 });
 
 test("legacy retained values decode once and marked pageviews are not double-decoded", () => {

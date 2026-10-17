@@ -92,7 +92,7 @@ if (outcome.loaded) {
 }
 ```
 
-`decide` never touches HTML or mutates request/plan/touch state. It includes only supported, page-matching actions from definitely eligible variants. `evaluatePlan` returns the same actions flattened in order. Unknown rules stay unknown: they do not accidentally select a lower-priority single-winning segment. Decisions are personalization hints, not authentication or authorization.
+`decide` never touches HTML or mutates request/plan/touch state. It includes only supported, page-matching actions from definitely eligible variants. `evaluatePlan` returns the same actions flattened in order. Unknown rules stay unknown: they do not accidentally select a lower-priority single-winning segment. A cookieless request records its pathname as touch field `l` and can decide landing-page rules from it, so a later segment can win when an earlier segment's landing pages do not match. A cookie without `l` leaves those rules unknown. Decisions are personalization hints, not authentication or authorization.
 
 Campaigns with A/B testing (a holdout share) are decided per visitor arm. The arm the edge assigns is the one the browser tag assigns from the same cookies: a recorded arm in `_rm_ctx`, else a shared hash of the visitor's unit. The edge personalizes only the treatment arm. The browser keeps the default content for the holdout and records exposures for both arms. A debugger request (`?debug=true` or `?debug=yes`) always takes the treatment arm, matching the browser debugger. See [holdout arms](docs/PLAN_SCHEMA.md#holdout-arms).
 

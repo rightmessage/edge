@@ -81,6 +81,22 @@ function compare(value: unknown, operator: string | undefined, expected: unknown
   }
 }
 
+// Same path criterion the current/last pageview branch uses, including a host-qualified
+// value that names only a domain (the browser treats that as a match on this host).
+function comparePathCriterion(actualPath: string, hostname: string, rule: RuleObject): Truth {
+  let expected = rule.value;
+  if (typeof expected !== "string") return false;
+  if (/^https?:\/\//.test(expected) || /^[^/]+\.[^/]+/.test(expected)) {
+    try {
+      const criterion = new URL(/^https?:\/\//.test(expected) ? expected : `https://${expected}`);
+      if (criterion.hostname !== hostname) return false;
+      if (criterion.pathname === "/" && !expected.endsWith("/")) return true;
+      expected = criterion.pathname;
+    } catch { /* compare the original value */ }
+  }
+  return compare(actualPath, rule.operator, expected, "path");
+}
+
 const timestamp = (value: unknown): number => Math.floor(new Date(value as string | number).getTime() / 1000);
 
 interface LocalDateParts { year: number; month: number; day: number; weekday: number }
@@ -220,6 +236,15 @@ export function decide(plan: EdgePlan, request: EdgeRequest, touch: TouchState, 
   const bySegment = new Map(plan.dimensions.flatMap(d => d.segments.map(s => [s.id, d.id])));
   const cache = new Map<string, Record<string, Truth>>();
   const active = new Set<string>();
+  // The browser rewrites `$type: "landingpage"` to the first recorded page path. On a
+  // request with no touch cookie that path is this request, and `observeTouchCookie`
+  // stores it as `touch.l`. A cookie that never recorded `l` stays unknown: the current
+  // URL is not evidence of an earlier landing. Identified contacts use their snapshot
+  // instead, below, and do not fall back to `l`.
+  const evaluateLandingPage = (rule: RuleObject): Truth => {
+    if (rule.timeframe && rule.timeframe !== "ever") return UNKNOWN;
+    return typeof touch.l === "string" ? comparePathCriterion(touch.l, url.hostname, rule) : UNKNOWN;
+  };
   const dimension = (id: string | undefined): Record<string, Truth> => {
     if (id === undefined) return {};
     if (cache.has(id)) return cache.get(id)!;
@@ -273,7 +298,9 @@ export function decide(plan: EdgePlan, request: EdgeRequest, touch: TouchState, 
         const recorded = typeof rule.edge.key === "string" ? recordedOutcomes?.get(rule.edge.key) : undefined;
         return typeof recorded === "boolean" ? recorded : UNKNOWN;
       }
-      return rule.edge.reason === "integration-signal" ? evaluateAnonymousIntegrationRule(rule) : UNKNOWN;
+      if (rule.edge.reason === "integration-signal") return evaluateAnonymousIntegrationRule(rule);
+      if (rule.$source === "pageviews" && rule.$type === "landingpage") return evaluateLandingPage(rule);
+      return UNKNOWN;
     }
     switch (rule.$source) {
       case "segments": {
@@ -289,6 +316,7 @@ export function decide(plan: EdgePlan, request: EdgeRequest, touch: TouchState, 
       case "currentpage": return rule.$type === "path" ? compare(url.pathname, rule.operator, rule.value, "path") : UNKNOWN;
       case "pageviews": {
         if (rule.timeframe && rule.timeframe !== "ever") return UNKNOWN;
+        if (rule.$type === "landingpage") return evaluateLandingPage(rule);
         if (rule.$type === "query") {
           if (rule.occurrence === "first touch" || rule.occurrence === "last touch") {
             // Both cookie writers record every observed name and the tag seeds
@@ -300,19 +328,7 @@ export function decide(plan: EdgePlan, request: EdgeRequest, touch: TouchState, 
           if (rule.occurrence !== "last" && rule.occurrence !== "current") return UNKNOWN;
           return matchesQueryValue(Object.hasOwn(query, String(rule.query)) ? query[String(rule.query)] : undefined, rule);
         }
-        if (rule.$type === "path" && ["last", "current"].includes(rule.occurrence ?? "")) {
-          let expected = rule.value;
-          if (typeof expected !== "string") return false;
-          if (/^https?:\/\//.test(expected) || /^[^/]+\.[^/]+/.test(expected)) {
-            try {
-              const criterion = new URL(/^https?:\/\//.test(expected) ? expected : `https://${expected}`);
-              if (criterion.hostname !== url.hostname) return false;
-              if (criterion.pathname === "/" && !expected.endsWith("/")) return true;
-              expected = criterion.pathname;
-            } catch {}
-          }
-          return compare(url.pathname, rule.operator, expected, "path");
-        }
+        if (rule.$type === "path" && ["last", "current"].includes(rule.occurrence ?? "")) return comparePathCriterion(url.pathname, url.hostname, rule);
         return UNKNOWN;
       }
       case "referrer": {

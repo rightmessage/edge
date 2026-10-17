@@ -1,6 +1,6 @@
 {
   "name": "@rightmessage/edge",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Portable, fail-open edge personalization for RightMessage",
   "type": "module",
   "license": "MIT",
