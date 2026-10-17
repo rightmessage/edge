@@ -1,6 +1,6 @@
-# Published plan schema, version 1
+# Published plan schema, versions 1 and 2
 
-This describes the public JSON consumed by `@rightmessage/edge`, not an alternative authoring format. A published plan preserves the browser's rule vocabulary but carries only actions the edge may execute at least in part; wholly browser-owned actions are omitted and stay with the browser tag. The edge executes only decisions it can establish and operations the compiler explicitly permits; the browser remains authoritative.
+This describes the public JSON consumed by `@rightmessage/edge`, not an alternative authoring format. A published plan preserves the browser's rule vocabulary. It carries the actions the edge may execute at least in part, plus browser-owned stubs that tell the edge where the browser will write, so the edge can stay beneath them. The edge executes only decisions it can establish and operations the compiler explicitly permits; the browser remains authoritative.
 
 ## Live reference
 
@@ -33,7 +33,7 @@ The URLs are not arbitrary redirect destinations supplied by a plan: their strin
 
 The loader validates the plan's `version`, exact `teamPid`, `queryNames` array of strings excluding `_rm_ctx`, and `dimensions` and `campaigns` arrays. This is root validation, **not** exhaustive validation of every nested rule or action. Preserve compiler output rather than treating arbitrary JSON that passes those checks as a supported plan.
 
-`SUPPORTED_PLAN_VERSIONS` is `[1]`. Release version and plan version are separate fields, both currently `1`. The revision belongs to the release; there is no required root `revision` in the plan. Treat the revision as an opaque publication identifier. The core does not recompute it from the plan body.
+`SUPPORTED_PLAN_VERSIONS` is `[1, 2]`. Version 2 exists only to carry the consent gate: a version 2 plan without `consent: "required"` is `invalid-plan`, which fails closed. Release version and plan version are separate fields; the release stays version `1`. The revision belongs to the release; there is no required root `revision` in the plan. Treat the revision as an opaque publication identifier. The core does not recompute it from the plan body.
 
 ```ts
 const load = startPlanLoad(
@@ -55,11 +55,12 @@ The default per-request deadline is 300 ms. The in-memory cache retains up to tw
 
 | Field | Shape | Meaning |
 | --- | --- | --- |
-| `version` | `1` | Supported plan schema version. |
+| `version` | `1` or `2` | Plan schema version. The compiler emits `2` exactly when the project waits for cookie consent. 0.1.x and 0.2.x evaluators support only `1`, so they bypass a consent project's plan and write no cookie. |
+| `consent` | optional `"required"` | Present only with `version: 2`. Until the request carries `rm_consent=1`, the edge writes no cookie and personalizes nothing (see [COOKIES.md](COOKIES.md#rm_consent-and-rm_exclude)). A version 1 plan that carries it is gated too. |
 | `teamPid` | string | Public project identifier; must match the release/configuration. |
 | `queryNames` | string array | Compiler-discovered query names needed by published rules. Sorted by the compiler; `_rm_ctx` is excluded. This is the touch-history allowlist, not visitor query values. |
 | `dimensions` | dimension array | Referenced dimensions, including transitive dependencies through signals. Not necessarily every dimension in the project. |
-| `campaigns` | campaign array | Ordered live campaigns, limited to variants and actions with at least one edge-permitted operation. Holdout-tested campaigns are included behind `campaign-experiment`. There is no root `actions` array. |
+| `campaigns` | campaign array | Ordered live campaigns with their Original layers and every variant that has an entry: an executable action or a browser-owned stub. There is no root `actions` array. |
 | `connectionScope` | optional string | Opaque active integration-connection scope used to reject recorded outcomes from another connection. It is not a contact ID, credential, or revision. |
 
 Object key order is not semantic, except that attribute/style modification ordering must be preserved. Array order is significant, including segment priority and action order. Do not reorder or strip what the plan carries.
@@ -136,24 +137,71 @@ Leaf `edge` metadata contains `supported`, `reason`, and sometimes `key`. Signal
 
 ## Campaigns, variants, and actions
 
-The live campaign shape includes `id`, `name`, `is_active`, `base_url`, `condition`, `dimension_id`, `goal_ids`, `recipe_code`, `testing`, and `variants`. Variants contain `id`, `name`, `rules`, and `actions`.
+The live campaign shape includes `id`, `name`, `is_active`, `base_url`, `condition`, `dimension_id`, `goal_ids`, `recipe_code`, `testing`, `original`, and `variants`. Variants contain `id`, `name`, `rules`, optional `abTest`, and `actions`.
 
-The evaluator considers active campaigns, eligible variants, and page-matching actions in published order. It does not evaluate campaign display metadata as another rule tree or stop after the first eligible campaign. Before a campaign's variants, it resolves the visitor's holdout arm exactly as the browser does (see [Holdout arms](#holdout-arms)) and considers only the treatment arm. For the holdout arm, or when the arm is unknown, the browser keeps the default content and records the exposure. The edge action boundary is `edge.supported === true` plus page eligibility, followed by successful transformation of actual matching elements. In a campaign resolved to its treatment arm, an action with `edge.reason === "campaign-experiment"` and a non-empty `edge.operations` also crosses that boundary.
+The evaluator considers active campaigns in published order, walking every campaign's Original layer before any audience, exactly as the browser collects candidates (see [The walk](#the-walk)). It does not evaluate campaign display metadata as another rule tree or stop after the first eligible campaign. Before a campaign's variants, it resolves the visitor's holdout arm exactly as the browser does (see [Holdout arms](#holdout-arms)) and personalizes only the treatment arm. For the holdout arm the browser keeps the default content and records the exposure.
+
+An entry is executable at 0.3 when its `edge.operations` is non-empty and its page criteria match. `edge.supported` and `edge.reason` remain compatibility shells for older evaluators, which 0.3 ignores. Execution also needs a decided node and successful transformation of actual matching elements.
+
+### Original layers, A/B tests and stubs
+
+These additions all live inside schema version 1. 0.1.x and 0.2.x never read them.
+
+| Addition | Shape | Meaning |
+| --- | --- | --- |
+| `campaign.original` | `{ abTest?, actions }` | The campaign's Original layer. With a running `abTest` it carries each version's forms. A setup test is `{ abTest: { id, state: "setup" }, actions: [] }` and renders nothing. Without `abTest` it is a deployed winner's frozen actions, which render for every arm. Its entries use `variantId: "original"`. |
+| `variant.abTest` / `original.abTest` | `{ id, state: "running", run, weights }` or `{ id, state: "setup" }` | `weights` are integers 1 to 99 summing to 100 over a subset of `A`..`D` that includes `A`. Anything else leaves the version unknown. |
+| `action.versions` | array of `A`..`D` | Present on a form that occurs in some, but not all, versions of a running test. A form without it occurs in every version. Filtering a node's entries by the drawn version reproduces the browser's effective actions. |
+| Browser-owned stub | `{ actionId, campaignId, variantId, page, selector?, versions?, edge: { supported: false, reason: "browser-owned", operations: [], claims } }` | A write the browser owns, inline at its browser position. `claims` are slot families: `children`, `style`, `class`, `element`, `attr:NAME`, or `page` when the edge cannot locate the writer. A stub without a selector is unlocatable too. |
+| Legacy gate | `supported: false, reason: "campaign-test"` | Every executable variant action of a campaign with a running audience test carries it, so 0.1.x and 0.2.x render exactly what they rendered before such campaigns were published. |
+
+### The walk
+
+`evaluatePlan(plan, request, touch, now?)` returns `Step[]` in browser candidate order, where the array index is the layer rank:
+
+- `{ kind: "apply", action, versions? }`: an edge write. `versions` is copied to the receipt.
+- `{ kind: "claim", selector, slots }`: a higher writer the edge does not perform. The transform keeps lower writes out of the elements and slot families it may touch.
+- `{ kind: "cut" }`: a higher writer the edge cannot locate. Every lower apply is dropped.
+
+When the plan requires consent and the request lacks `rm_consent=1`, the walk is empty. The visitor mode is `debug` (last `debug` query value `true` or `yes`), else `excluded` (`rm_exclude=1`), else `normal`.
+
+1. **Original layers**, for every active campaign in order:
+   - no `abTest`: apply every entry (a deployment, for held-back and excluded visitors too);
+   - debug request: cut, since the debugger pins versions in session storage the edge cannot see;
+   - setup test: nothing;
+   - running test: apply the drawn version's entries, or claim every entry when the version is unknown.
+2. **Audiences**, for every active campaign's variants in order:
+   - rules false: skip;
+   - holdback arm: skip, whatever the rules resolve to, because the browser never writes it;
+   - debug request and any `abTest`, including setup: cut;
+   - the version is `A` without a test or for a setup test, else the drawn version;
+   - rules true, treatment arm and a known version: apply that version's entries;
+   - otherwise claim that version's entries, or every entry when the version is unknown.
+
+Within an applied node, an executable entry becomes an apply and a stub becomes a claim (or a cut). A claimed entry claims the slot families of its operations, deferred operations and `claims`. Entries whose page criteria miss the URL emit nothing. The transform applies steps in order, so a later write wins, as in the browser.
+
+A running test's version is drawn in this order:
+
+1. `rm_exclude=1`: `A`.
+2. Invalid weights: unknown.
+3. A valid `_rm_ctx.ab` record for `testId:run`: that version, or unknown when the weights lack it.
+4. No unit: unknown.
+5. `assignAbTestVersion(weights, abTestVersionPoint(unit, campaignId, nodeId, testId, run))`. The point is FNV-1a over the UTF-16 code units of `rm-abtest-v1 NUL unit NUL campaignId NUL nodeId NUL testId NUL run`, finalized with murmur3 `fmix32` and scaled to [0, 100). `nodeId` is the audience id, or `original`. The version is the first of `A`..`D`, in that order, whose cumulative weight exceeds the point.
+
+`decide(plan, request, touch, now?)` projects the walk without a DOM: it groups the applies per node as `{ campaignId, variantId, layer: "original" | "audience", versionId?, actions }[]` and drops any apply that has a claim or cut above it, since any of them may overlap it. `versionId` is the drawn version of a running test. Neither API performs HTML rewriting; selectors and operation success are resolved by the transform.
 
 ### Holdout arms
 
-A campaign whose `testing.is_enabled` is truthy publishes every retained action as `{"supported": false, "reason": "campaign-experiment", "operations": [...], "deferredOperations": [...]}`. Evaluators that cannot assign arms (0.1.x) skip such actions and never personalize the holdout arm. A publisher may omit tested campaigns to keep the plan within the 1 MiB limit; omitted campaigns stay browser-applied.
+A campaign whose `testing.is_enabled` is truthy publishes its variant actions as `{"supported": false, "reason": "campaign-experiment", "operations": [...], "deferredOperations": [...]}`, or behind `campaign-test` when an audience test runs. Evaluators that cannot assign arms (0.1.x) skip such actions and never personalize the holdout arm. To fit the 1 MiB limit a publisher demotes campaigns to stubs rather than omitting them, so the edge still sees every writer.
 
-The arm (`campaignHoldback`) is chosen in this order. A request whose last `debug` query value is `true` or `yes` (`debugForcesTreatment`) skips it and takes the treatment arm, matching the browser debugger, which neither reads nor records arms.
+The arm is chosen in this order. A debug request (last `debug` query value `true` or `yes`) and an excluded browser (`rm_exclude=1`) skip it and take the treatment arm, matching the browser, which neither reads nor records arms for them.
 
 1. A record for the campaign in `_rm_ctx.ca`. It wins for every campaign, including a non-experiment campaign that still holds a sticky holdout.
 2. For a campaign without testing enabled, the treatment arm.
 3. `holdoutPoint(unit, campaignId) < Number(testing.withhold || 10)` holds the visitor out. The point is FNV-1a over the UTF-16 code units of `rm-holdout-v1 NUL unit NUL campaignId`, finalized with murmur3 `fmix32` and scaled to [0, 100).
 4. With no unit, the arm is unknown.
 
-The unit is the touch cookie's `u`, else `_rm_ctx.vid` when `_rm_ctx.ca` is present. The browser hashes the same unit. `personalizeResponse` mints `u` only for a request carrying neither `__Host-rm_touch` nor `_rm_ctx`. See [COOKIES.md](COOKIES.md).
-
-`evaluatePlan(plan, request, touch, now?)` returns the eligible actions in that order. `decide(plan, request, touch, now?)` returns the same selections grouped as `{ campaignId, variantId, actions }[]`, omitting groups with no eligible actions. Neither API performs HTML rewriting; selectors and operation success are resolved by the transform.
+The unit (`assignmentUnit`) is the touch cookie's `u`, else `_rm_ctx.vid` when `_rm_ctx.ca` or `_rm_ctx.ab` decodes as a ledger. The browser hashes the same unit for arms and versions. `admitRequest` mints `u` only for a request carrying neither `__Host-rm_touch` nor `_rm_ctx`, and never for an excluded browser. See [COOKIES.md](COOKIES.md).
 
 An element action has:
 
@@ -195,7 +243,7 @@ Action metadata is:
 
 Null/empty attribute and style values are not compiler candidates. Empty text is not a text candidate. Unknown modification keys are retained as deferred tokens with `browser-modification`, rather than silently implemented by the edge. Strings containing `{{` or `{%` anywhere in an operation's values are dynamic and deferred.
 
-Actions the edge cannot execute at all are omitted from the plan: non-`MODIFY_ELEMENT` actions, unsupported selectors, browser targeting, and actions whose every operation is deferred. Variants and campaigns left without actions are omitted too, so plan size tracks edge work rather than campaign content. Operation reasons on retained actions include `dynamic-value`, `browser-property`, `browser-visibility`, `browser-modification`, and `browser-operation-order`. The last prevents partial execution from reordering overlapping writes:
+Actions the edge cannot execute at all ship as browser-owned stubs: non-`MODIFY_ELEMENT` actions, unsupported selectors and browser targeting claim `page`, and actions whose every operation is deferred claim their slot families. The compiler drops a stub with no executable entry beneath it in the walk. Variants and campaigns left without entries are omitted. Operation reasons on retained actions include `dynamic-value`, `browser-property`, `browser-visibility`, `browser-modification`, and `browser-operation-order`. The last prevents partial execution from reordering overlapping writes:
 
 - If either `attr:src` or `attr:srcset` is deferred, both present candidates are deferred.
 - Deferred `attr:style` or any deferred `style:*` write defers all present `style:*` candidates.
@@ -271,12 +319,12 @@ This compact example follows the fetched plan's nesting and compiler metadata. I
 
 ## Pinned browser handoff and fail-open behavior
 
-A successful transform emits `meta[name="rm-edge-loader"]` containing the **validated public `release.loaderUrl`** and `script#RM_EDGE[type="application/json"]` with `{ version: 1, revision, receipts, originals }`. Each receipt names `campaignId`, `variantId`, `actionId`, `targetId`, and exact successful `operations`. `originals` retains the touched baselines needed for browser restoration.
+A successful transform emits `meta[name="rm-edge-loader"]` containing the **validated public `release.loaderUrl`** and `script#RM_EDGE[type="application/json"]` with `{ version: 1, revision, receipts, originals }`. Each receipt names `campaignId`, `variantId`, `actionId`, `targetId`, exact successful `operations`, and `versions` when the applied form carried them. `originals` retains the touched baselines needed for browser restoration.
 
 The browser loader must use the pinned URL from the same release as the plan, not the latest unpinned tag URL. The browser's `window.RM_RELEASE_REVISION` must agree with the receipt revision before adoption. Deferred operations, unmatched/later targets, restoration, and analytics remain browser-owned; a definite eligibility disagreement is corrected by the browser. This pairing is why serving an old cached plan is safe only with its corresponding old pinned loader. Never combine a plan from one release with a loader fetched from a later release pointer.
 
 `requestBypassReason` excludes disabled execution (`not-production`), non-GET requests (`request-method`), RSC requests unless `allowRsc` is enabled (`rsc`), URLs containing `preview`, `rmpreview`, `__rm_test`, or `rmeditor` (`preview`), and requests carrying the tag's draft-preview session cookie `rm_preview=1` (`preview`). The query keys are presence checks, not truthy-value checks.
 
-Non-HTML responses pass through. HTML with a non-200 origin status or unsupported declared charset bypasses. Load failures, timeouts, unsupported versions, and invalid plans preserve the origin body; without a validated plan there is no guessed query allowlist or touch-cookie update. No eligible/successful actions yield `no-actions`, or `cookie-only` when attribution alone changed. Attribution, transform, selector, serialization, and buffer failures fail open rather than deliver partial personalization.
+Non-HTML responses pass through. HTML with a non-200 origin status or unsupported declared charset bypasses. Load failures, timeouts, unsupported versions, and invalid plans preserve the origin body; without a validated plan there is no guessed query allowlist or touch-cookie update. A consent project's request without `rm_consent=1` bypasses as `consent`, with no Set-Cookie and no private headers. No eligible/successful actions yield `no-actions`, or `cookie-only` when attribution alone changed. Attribution, transform, selector, serialization, and buffer failures fail open rather than deliver partial personalization.
 
 HTML responses expose `x-rm-edge: applied` or `x-rm-edge: bypass:<reason>`. A successful touch observation can survive a later transform failure. Cookie-only or personalized responses become private/no-store; committed body changes remove stale body validators, length, and encoding headers. Request bypasses preserve the body and do not observe touch history.

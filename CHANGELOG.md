@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+Breaking within 0.x: `evaluatePlan` returns and `transformHTML` takes `Step[]` instead of `Action[]`, `holdoutUnit` is now `assignmentUnit`, and `campaignHoldback` and `debugForcesTreatment` are internal. There are no compatibility aliases.
+
+- A/B tests and deployed winners render at the edge. The walk visits every campaign's Original layer, then every audience, in the browser's candidate order, and returns ordered `apply`, `claim` and `cut` steps. A running test draws its version exactly as the browser does (`rm-abtest-v1`): a version recorded in `_rm_ctx.ab` wins, and a recorded version the weights lack, invalid weights or a missing unit leave it unknown. Setup tests render untested, and a setup Original test renders nothing. Deployments render for every arm.
+- Every writer the edge does not perform is a claim or a cut at its own rank: undecided rules, unknown arms and versions, browser-owned stubs and deferred operations. A read-only probe pass vetoes any lower apply such a claim may overlap, by element and slot family, including ancestors and descendants. Text and find/replace on one target are left to the browser instead of failing the response. `decide` drops any apply beneath a claim or cut, and its decisions gain `layer` and `versionId`.
+- Receipts carry `versions` when the applied form occurs only in some versions of a running test. The envelope stays version 1.
+- New `admitRequest(plan, request, observe?)` owns the consent gate, `rm_exclude`, unit minting and touch observation for every adapter. A plan with `consent: "required"` personalizes nothing and writes no cookie until the request carries `rm_consent=1`, and responds `bypass:consent`. `rm_exclude=1` renders treatment and version A everywhere and writes no cookie.
+- `SUPPORTED_PLAN_VERSIONS` is `[1, 2]`. Version 2 must carry `consent: "required"`; one without it is `invalid-plan`.
+- `assignmentUnit` also accepts `_rm_ctx.vid` beside an `ab` ledger. New exports: `admitRequest`, `abTestVersionPoint`, `assignAbTestVersion`, `decodeTestVersions`, `assignmentUnit`, `ORIGINAL_ID`, and the `Step`, `Admission`, `PlanAbTest`, `PlanEntry`, `BrowserOwnedAction`, `OriginalLayer`, `Slot` and `VersionId` types.
+- `tests/fixtures/edge-tests.json` and `tests/fixtures/audience-test-assignment.json` are byte-identical copies of the RightMessage application's shared fixtures.
+
 ## 0.2.2
 
 - Anonymous `pageviews` / `landingpage` rules are decided from the first observed pathname. A request with no `__Host-rm_touch` cookie records that pathname as `l` and compares it with the same path rules as the current page, so a later single-winning segment can win when an earlier segment's landing pages do not match. A cookie without `l` still leaves those leaves unknown. Identified contacts keep using recorded snapshot outcomes and do not fall back to `l`.

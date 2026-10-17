@@ -1,12 +1,12 @@
 # Cookie wire contracts
 
-These cookies are best-effort first-party display inputs, not authentication, an authorization boundary, a consent policy, or a synchronized visitor ledger. The browser remains authoritative and can replace an edge result when its own current evaluation disagrees.
+These cookies are best-effort first-party display inputs, not authentication, an authorization boundary, or a synchronized visitor ledger. The engine honors the tag's consent and opt-out flags (see [`rm_consent` and `rm_exclude`](#rm_consent-and-rm_exclude)) but is not itself a consent policy. The browser remains authoritative and can replace an edge result when its own current evaluation disagrees.
 
 ## `_rm_ctx`: browser context
 
 `decodeContextCookie(cookieHeader)` reads the first `_rm_ctx` entry, URI-decodes it, reverses the browser's base64 substitutions (`-` → `+`, `_` → `/`, `~` → `=`), strictly decodes UTF-8, and parses JSON. Missing, malformed, invalid UTF-8, or non-version-1 payloads return `{}`. The decoder preserves version-1 fields rather than imposing a second browser schema.
 
-Relevant fields are `v: 1`, `dims` (dimension IDs to answered segment arrays), `cid` (contact identity), `identityScope: {project, connection}`, optional `es` (recorded outcomes), `vid` (the browser's visitor ID), and optional `ca` (the campaign arm ledger). A dimension absent from `dims` is unanswered. The browser writes answers synchronously and flushes pending context writes before navigation.
+Relevant fields are `v: 1`, `dims` (dimension IDs to answered segment arrays), `cid` (contact identity), `identityScope: {project, connection}`, optional `es` (recorded outcomes), `vid` (the browser's visitor ID), optional `ca` (the campaign arm ledger), and optional `ab` (the test version ledger). A dimension absent from `dims` is unanswered. The browser writes answers synchronously and flushes pending context writes before navigation.
 
 The browser writes `_rm_ctx` across the registrable domain. Profile outcomes can therefore be used on the apex and sibling subdomains. Pageview history is per origin, so landing-page outcomes require an additional origin binding. This package only decodes `_rm_ctx`; it does not set its Domain or rewrite it.
 
@@ -38,7 +38,13 @@ The browser omits `es` whenever including it would push `_rm_ctx` beyond 3,500 e
 
 ### Campaign arm ledger
 
-`ca` is `{"v": 1, "r": [[campaignId, exposed, holdback], ...]}`, with at most 128 records. `decodeCampaignArms(context)` returns campaign ID → `holdback`. It skips malformed records and drops campaign IDs that are recorded more than once, as the browser does. The browser adds records only while they fit its cookie budget, so an absent record may still be an arm the browser holds. Once present, `ca` makes `vid` a holdout unit. A context without `ca` may predate the ledger mirror, so its `vid` is not used.
+`ca` is `{"v": 1, "r": [[campaignId, exposed, holdback], ...]}`, with at most 128 records. `decodeCampaignArms(context)` returns campaign ID → `holdback`. It skips malformed records and drops campaign IDs that are recorded more than once, as the browser does. The browser adds records only while they fit its cookie budget, so an absent record may still be an arm the browser holds. ### Test version ledger
+
+`ab` is `{"v": 1, "r": [[testId:run, exposed, versionId], ...]}`, with at most 128 records; a longer ledger is ignored. `decodeTestVersions(context)` returns `testId:run` → version, with the tag's validity rules: a record needs exactly three items, a key matching `abt_[A-Za-z0-9]+:abr_[A-Za-z0-9]+` of at most 256 characters, a boolean exposed flag, and a version in `A`..`D`. A key recorded twice is dropped. The browser writes `ab` on exposure, inside the 1,200-character budget it shares with `ca`, so an absent record may still be a version the browser holds in local storage. A recorded version beats the hash; one the running test's weights lack leaves the version unknown.
+
+### Assignment unit
+
+`assignmentUnit(touchUnit, context)` returns the touch cookie's valid `u`, else `vid` when `ca` or `ab` decodes as a ledger, else null. Only a tag that mirrors ledgers writes either one, and it hashes the same visitor id it writes as `vid`. A context without a ledger may predate the mirror, so its `vid` is not used.
 
 ## `__Host-rm_touch`: observed attribution
 
@@ -48,9 +54,9 @@ The browser omits `es` whenever including it would push `_rm_ctx` beyond 3,500 e
 {"v":1,"q":{"source":["first value","last value"]},"r":"search.example","l":"/pricing","u":"AAAAAAAAAAAAAAAAAAAAAA"}
 ```
 
-`u` is a 22-character base64url holdout unit (128 random bits). `personalizeResponse` mints it with `mintHoldoutUnit()` only when the request has neither this cookie nor `_rm_ctx`, which identifies a visitor whose browser holds no arms yet. `observeTouchCookie(..., unit)` records it only when the cookie has no valid `u`, and never replaces one. The browser preserves `u` but never mints it. Writers serialize keys in `v, q, r, l, u` order. `l` is omitted when unknown, so a cookie without it stays byte-identical with the browser's `v, q, r, u` order. Invalid units are dropped on decode.
+`u` is a 22-character base64url assignment unit (128 random bits), hashed for both arms and test versions. `admitRequest` (and so `personalizeResponse`) mints it with `mintHoldoutUnit()` only when the request has neither this cookie nor `_rm_ctx`, which identifies a visitor whose browser holds no arms or versions yet. It never mints one for a browser with `rm_exclude=1`, or without required consent. `observeTouchCookie(..., unit)` records it only when the cookie has no valid `u`, and never replaces one. The browser preserves `u` but never mints it. Writers serialize keys in `v, q, r, l, u` order. `l` is omitted when unknown, so a cookie without it stays byte-identical with the browser's `v, q, r, u` order. Invalid units are dropped on decode.
 
-`l` is the first observed pathname, used to decide `pageviews` / `landingpage` rules. It is set only when the request has no `__Host-rm_touch` cookie: that pathname is the landing page. A cookie that already exists but has no `l` is not backfilled from the current URL. The value must be a pathname of at most 256 characters, starting with `/`, with no `?`, `#`, backslash, or control character; anything else is dropped and the landing page stays unknown. The current browser tag rewrites this cookie from the keys it knows (`v`, `q`, `r`, `u`) and drops `l`. After that rewrite, landing-page leaves are unknown again until a cookieless request records a new `l`.
+`l` is the first observed pathname, used to decide `pageviews` / `landingpage` rules. It is set only when the request has no `__Host-rm_touch` cookie: that pathname is the landing page. A cookie that already exists but has no `l` is not backfilled from the current URL. The value must be a pathname of at most 256 characters, starting with `/`, with no `?`, `#`, backslash, or control character; anything else is dropped and the landing page stays unknown. Browser tags before the field-preservation rule below rewrote this cookie from the keys they knew (`v`, `q`, `r`, `u`) and dropped `l`. After such a rewrite, landing-page leaves are unknown again until a cookieless request records a new `l`.
 
 Only allowlisted query names are retained. Names are deduplicated and sorted; `_rm_ctx` is always excluded. Each retained value is a pair of strings. Duplicate current query parameters use their last decoded value. An observed empty string is a value, not absence. A first/last-touch name absent from the cookie has no observed pageview and matches no operator, including negative operators.
 
@@ -58,8 +64,17 @@ Optional retained browser pageviews seed missing names from their first and last
 
 `r` contains only the first observed referrer hostname, never its path, query, or fragment. An own `r: ""` explicitly records a direct or same-host first touch and survives later referrers. Missing `r` means unobserved or evicted, so referrer rules remain unknown. Referrer URLs must be HTTP(S), and retained hostnames must be canonical valid hostnames. Same-host comparison is exact, not registrable-domain-wide.
 
-The full encoded cookie name/value is bounded to **1,024 UTF-8 bytes**. Oversized incoming cookies are discarded. Writers evict whole query fields in reverse lexicographic name order, then the referrer, then the landing path, if necessary. The holdout unit is not evicted. URI encoding makes written values ASCII, so this bound also holds for Unicode inputs. Retired allowlist names disappear on the next observation.
+The full encoded cookie name/value is bounded to **1,024 UTF-8 bytes**. Oversized incoming cookies are discarded. Writers evict whole query fields in reverse lexicographic name order, then the referrer, then the landing path, if necessary. The unit is not evicted.
+
+**Field preservation.** The browser keeps every top-level field other than `v`, `q`, `r` and `u` as an opaque extra, in received order, and encodes `v, q, r, ...extras, u`. It evicts extras after `r`, last first, and never creates them. So an edge-only field must sit between `r` and `u` and tolerate eviction after `r`; then the browser preserves it without a lockstep release. `l` is the first such field, and `v, q, r, l, u` is byte-identical on both writers. The edge itself writes only the fields it owns. URI encoding makes written values ASCII, so this bound also holds for Unicode inputs. Retired allowlist names disappear on the next observation.
 
 The returned observation is `{state, value, cookie, changed}`. `cookie` includes exactly `Secure; Path=/; SameSite=Lax`, with no Domain, HttpOnly, or persistent expiry. Its `__Host-` prefix makes it host-only, unlike `_rm_ctx`. A changed cookie is appended by the response integration; unchanged observations need no Set-Cookie. Responses carrying a new touch observation are private/no-store. Failed plan loads do not guess an allowlist or update the cookie.
 
 The 1 KiB bound and pre-cookie history can cause temporary edge/browser disagreement. The browser corrects its own display using the ordinary personalization lifecycle.
+
+## `rm_consent` and `rm_exclude`
+
+The browser tag writes both on the registrable domain; the edge only reads them. A flag is set when the `Cookie` header has at least one `name=` entry and every such entry is exactly `1`. An empty value, any other value, or conflicting duplicates read as absent.
+
+- **`rm_consent=1`** records the visitor's consent grant. A plan with `consent: "required"` (always `version: 2`) personalizes nothing without it: `admitRequest` returns `{ bypass: "consent" }`, no unit is minted, `observeTouchCookie` is not called, no Set-Cookie or private headers are added, and the response carries `x-rm-edge: bypass:consent`. `evaluatePlan` and `decide` also return nothing, for a caller that skips `admitRequest`. 0.1.x and 0.2.x reject a version 2 plan as `invalid-plan`, which also writes nothing.
+- **`rm_exclude=1`** marks a browser the site owner excluded from tests and stats. Consent is checked first, and a debug request takes precedence. Every campaign renders its treatment arm, every test renders version `A`, and deployed winners render. The touch cookie is observed for rule facts only: no unit is minted, and no cookie is written even when the observation changed.

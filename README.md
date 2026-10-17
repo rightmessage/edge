@@ -68,7 +68,7 @@ The optional `/wasm` entry adapts `html-rewriter-wasm` (lol-html) to the same st
 ## Pure decisions for server rendering
 
 ```ts
-import { decide, firstRequestHoldoutUnit, observeTouchCookie, startPlanLoad } from '@rightmessage/edge';
+import { admitRequest, decide, startPlanLoad } from '@rightmessage/edge';
 
 const load = startPlanLoad(request, {
   teamPid: '1213277114',
@@ -76,33 +76,33 @@ const load = startPlanLoad(request, {
 });
 const outcome = await load.promise;
 if (outcome.loaded) {
-  const cookie = request.headers.get('cookie') ?? '';
-  const observation = observeTouchCookie(
-    cookie,
-    outcome.loaded.plan.queryNames,
-    request.url,
-    request.headers.get('referer') ?? '',
-    null,
-    [],
-    firstRequestHoldoutUnit(cookie), // lets a first request run A/B-tested campaigns
-  );
-  const decisions = decide(outcome.loaded.plan, request, observation.state);
-  // Decision[]: { campaignId, variantId, actions } in published order.
-  // Persist observation.cookie as Set-Cookie only when observation.changed.
+  // Consent, rm_exclude, unit minting and touch observation in one call.
+  const admission = admitRequest(outcome.loaded.plan, request);
+  if ('bypass' in admission) {
+    // 'consent': the project waits for cookie consent. Write no cookie and render nothing.
+  } else {
+    const decisions = decide(outcome.loaded.plan, request, admission.touch);
+    // Decision[]: { campaignId, variantId, layer: 'original' | 'audience', versionId?, actions }
+    // in browser layer order: every Original layer, then every audience.
+    // Append admission.cookie as Set-Cookie when it is not null.
+  }
 }
 ```
 
-`decide` never touches HTML or mutates request/plan/touch state. It includes only supported, page-matching actions from definitely eligible variants. `evaluatePlan` returns the same actions flattened in order. Unknown rules stay unknown: they do not accidentally select a lower-priority single-winning segment. A cookieless request records its pathname as touch field `l` and can decide landing-page rules from it, so a later segment can win when an earlier segment's landing pages do not match. A cookie without `l` leaves those rules unknown. Decisions are personalization hints, not authentication or authorization.
+`decide` never touches HTML or mutates request/plan/touch state. It includes only page-matching actions from definitely eligible, decided nodes. With no DOM to check overlap, it also drops any action beneath a writer the edge does not perform. `evaluatePlan` returns the full ordered steps that `transformHTML` consumes. Unknown rules stay unknown: they do not accidentally select a lower-priority single-winning segment. A cookieless request records its pathname as touch field `l` and can decide landing-page rules from it, so a later segment can win when an earlier segment's landing pages do not match. A cookie without `l` leaves those rules unknown. Decisions are personalization hints, not authentication or authorization.
 
-Campaigns with A/B testing (a holdout share) are decided per visitor arm. The arm the edge assigns is the one the browser tag assigns from the same cookies: a recorded arm in `_rm_ctx`, else a shared hash of the visitor's unit. The edge personalizes only the treatment arm. The browser keeps the default content for the holdout and records exposures for both arms. A debugger request (`?debug=true` or `?debug=yes`) always takes the treatment arm, matching the browser debugger. See [holdout arms](docs/PLAN_SCHEMA.md#holdout-arms).
+Campaigns with a holdout share are decided per visitor arm, and running A/B tests per version. The edge assigns the arm and version the browser tag assigns from the same cookies: a recorded arm in `_rm_ctx.ca` or version in `_rm_ctx.ab`, else a shared hash of the visitor's unit. The edge personalizes only the treatment arm. Deployed winners and each campaign's Original layer render first, for every arm, then audiences, as in the browser. When the edge cannot know a rule, arm or version, it leaves that writer to the browser and stays out of the elements it may touch. A debugger request (`?debug=true` or `?debug=yes`) takes the treatment arm and leaves every tested layer to the browser. See [the walk](docs/PLAN_SCHEMA.md#the-walk).
+
+A project that waits for cookie consent publishes a version 2 plan with `consent: "required"`. Until the tag sets `rm_consent=1`, the edge writes no cookie and personalizes nothing. A browser opted out with `rm_exclude=1` sees the treatment arm and version A everywhere, and the edge writes no cookie for it. See [cookies](docs/COOKIES.md).
 
 ## API
 
 - `startPlanLoad(request, config, dependencies?, ctx?)` → `PlanLoad` with `promise` and `abort()`. Outcomes are `{ loaded: { plan, release } }` or `{ reason }`. Config: `teamPid`, optional `tagOrigin`, `enabled`, `allowRsc`. Dependencies: `fetch`, `planCache`, `planTimeoutMs`.
 - `personalizeResponse(request, origin, planLoad, dependencies)` → `Promise<Response>`. Supply `HTMLRewriter`; optional `observeTouchCookie` injection and a reason-only `log` callback.
-- `transformHTML(bytes, actions, release, HTMLRewriter)` performs the buffered transform and returns `null` when no operation succeeds. Prefer `personalizeResponse` for fail-open orchestration.
+- `admitRequest(plan, request, observeTouchCookie?)` → `{ bypass: 'consent' }` or `{ touch, cookie }`. It owns the consent gate, `rm_exclude`, unit minting and touch observation for every adapter.
+- `transformHTML(bytes, steps, release, HTMLRewriter)` performs the buffered transform and returns `null` when no operation succeeds. Prefer `personalizeResponse` for fail-open orchestration.
 - `createPlanCache({ now? })`, `PLAN_TIMEOUT_MS`, `RELEASE_FRESH_MS`, `NEGATIVE_TTL_MS`, `SUPPORTED_PLAN_VERSIONS`, `requestBypassReason`.
-- `evaluatePlan`, `decide`, touch/context/snapshot codec functions and their named TypeScript models.
+- `evaluatePlan` (ordered `apply`, `claim` and `cut` steps), `decide`, `abTestVersionPoint`, `assignAbTestVersion`, `decodeTestVersions`, `assignmentUnit`, touch/context/snapshot codec functions and their named TypeScript models.
 
 ## Failure and caching policy
 
@@ -116,10 +116,10 @@ Personalized and cookie-setting responses are private/no-store, including CDN co
 
 - Source HTML and plan documents: **1 MiB**; each transform output and collected restoration baselines: **2 MiB**; release pointer: **8 KiB**.
 - Only compiler-approved selectors/operations are claimed. Browser-only work, ambiguous rules, unsupported style shapes and unsafe selector dependencies stay browser-owned.
-- One rewriting pass handles normal actions. Removing an entire text node requires a read-only capture pass for restoration metadata.
+- One rewriting pass handles normal actions. A read-only probe pass runs only when a writer the edge does not perform sits above an edge write, or when text and find/replace meet on one target. Removing an entire text node requires a read-only capture pass for restoration metadata.
 - Keep the ordinary RightMessage tag installed. The bootstrap must use `meta[name="rm-edge-loader"]` when present so it loads the pinned public loader, not an immutable script directly.
 - In React, place `suppressHydrationWarning` on each exact personalized element. Cloaking should exclude successfully stamped targets. Soft navigation requires the framework adapter's route lifecycle integration.
-- Cookies are best-effort first-party history and are not a consent mechanism. Integrations remain responsible for consent and appropriate data handling.
+- Cookies are best-effort first-party history. The engine honors the tag's `rm_consent` gate for projects that wait for consent, but integrations remain responsible for consent and appropriate data handling.
 
 See [plan schema](docs/PLAN_SCHEMA.md), [receipt contract](docs/RECEIPT.md), [cookies](docs/COOKIES.md), and the shared [conformance vectors](tests/fixtures/conformance.json).
 
