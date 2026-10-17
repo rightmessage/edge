@@ -1,7 +1,7 @@
 import { boundedBytes, SOURCE_CAP } from './bytes.js';
 import type { EdgePlan, Release } from './plan-types.js';
 
-export const SUPPORTED_PLAN_VERSIONS: readonly number[] = Object.freeze([1]);
+export const SUPPORTED_PLAN_VERSIONS: readonly number[] = Object.freeze([1, 2]);
 export const PLAN_TIMEOUT_MS = 300;
 export const RELEASE_FRESH_MS = 20_000;
 export const NEGATIVE_TTL_MS = 3_000;
@@ -70,6 +70,8 @@ async function loadRevisionPlan(fetcher: Fetch, { pid }: ValidConfig, release: R
   try { plan = JSON.parse(new TextDecoder().decode(await boundedBytes(result, SOURCE_CAP))) as EdgePlan; }
   catch { throw new PlanLoadError('invalid-plan'); }
   if (!plan || !SUPPORTED_PLAN_VERSIONS.includes(plan.version) || plan.teamPid !== pid || !Array.isArray(plan.queryNames) || !plan.queryNames.every(name => typeof name === 'string' && name !== '_rm_ctx') || !Array.isArray(plan.dimensions) || !Array.isArray(plan.campaigns)) throw new PlanLoadError('invalid-plan');
+  // Version 2 exists only to carry the consent gate; one without it fails closed.
+  if (plan.version === 2 && plan.consent !== 'required') throw new PlanLoadError('invalid-plan');
   return plan;
 }
 

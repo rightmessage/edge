@@ -1,7 +1,9 @@
 export * from './plan-types.js';
 export * from './plan-load.js';
 export * from './edge-plan.js';
-export * from './holdout.js';
+export { abTestVersionPoint, assignAbTestVersion, assignmentUnit, decodeCampaignArms, decodeTestVersions, holdoutPoint, HOLDOUT_UNIT_PATTERN, mintHoldoutUnit } from './assignment.js';
+export { admitRequest } from './request.js';
+export type { Admission } from './request.js';
 export * from './touch-cookie.js';
 export * from './context.js';
 export * from './rewriter-types.js';

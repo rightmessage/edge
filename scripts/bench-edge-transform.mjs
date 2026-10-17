@@ -1,6 +1,6 @@
 // Portable transform benchmark: no production snapshots, network calls, or git history.
 // npm run build && npm run bench:edge-transform -- --runtime both --iterations 10
-// Optional --fixture file.json: { html, actions, release } with public transform inputs.
+// Optional --fixture file.json: { html, steps, release } with public transform inputs.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -22,13 +22,13 @@ if (!Number.isSafeInteger(iterations) || iterations < 1) throw new Error("--iter
 if (!Number.isSafeInteger(blocks) || blocks < 1) throw new Error("--blocks must be a positive integer");
 const revision = "a".repeat(64);
 const release = { version: 1, teamPid: "demo-team", revision, planUrl: `https://tags.example/demo-team/revisions/${revision}/plan.json`, loaderUrl: `https://tags.example/demo-team.js?revision=${revision}` };
-const action = (selector, modifications, operations) => ({ campaignId: "campaign", variantId: "variant", actionId: "action", selector, modifications, edge: { operations } });
+const apply = (selector, modifications, operations) => ({ kind: "apply", action: { campaignId: "campaign", variantId: "variant", actionId: "action", selector, modifications, edge: { operations } } });
 const html = `<!doctype html><html><head><title>Public benchmark</title></head><body>${'<section><h2 class="copy">Hello teams &amp; creators 雪</h2><p>Unchanged supporting content.</p></section>'.repeat(blocks)}</body></html>`;
 const fixtures = fixturePath ? [{ name: "custom", ...JSON.parse(readFileSync(fixturePath, "utf8")) }] : [
-  { name: "find-replace", html, release, actions: [action(".copy", { findReplace: [{ find: "teams", replace: "software teams" }] }, ["findReplace"])] },
-  { name: "text-regions", html, release, actions: [action(".copy", { text: "Welcome <em>software teams</em> 雪" }, ["text"])] },
-  { name: "removed-text", html, release, actions: [action(".copy", { findReplace: [{ find: "/.*/s", replace: "" }] }, ["findReplace"])] },
-  { name: "unmatched", html, release, actions: [action(".missing", { text: "Never inserted" }, ["text"])] },
+  { name: "find-replace", html, release, steps: [apply(".copy", { findReplace: [{ find: "teams", replace: "software teams" }] }, ["findReplace"])] },
+  { name: "text-regions", html, release, steps: [apply(".copy", { text: "Welcome <em>software teams</em> 雪" }, ["text"])] },
+  { name: "removed-text", html, release, steps: [apply(".copy", { findReplace: [{ find: "/.*/s", replace: "" }] }, ["findReplace"])] },
+  { name: "unmatched", html, release, steps: [apply(".missing", { text: "Never inserted" }, ["text"])] },
 ];
 let native;
 const rows = [];
@@ -46,7 +46,7 @@ export default { async fetch(request) {
  for (let i = 0; i <= iterations; i++) {
   passes = 0;
   const start = performance.now();
-  output = await transformHTML(bytes, fixture.actions, fixture.release, CountingRewriter);
+  output = await transformHTML(bytes, fixture.steps, fixture.release, CountingRewriter);
   if (i > 0) times.push(performance.now() - start);
  }
  return Response.json({ times, passes, output: output === null ? null : new TextDecoder().decode(output) });
@@ -68,7 +68,7 @@ export default { async fetch(request) {
       for (let i = 0; i <= iterations; i++) {
         passes = 0;
         const start = performance.now();
-        output = await transformHTML(bytes, fixture.actions, fixture.release, CountingRewriter);
+        output = await transformHTML(bytes, fixture.steps, fixture.release, CountingRewriter);
         if (i > 0) times.push(performance.now() - start);
       }
       results.wasm = { times, passes, output: output === null ? null : new TextDecoder().decode(output) };

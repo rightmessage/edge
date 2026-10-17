@@ -1,6 +1,9 @@
 import { decodeContextCookie, decodeEdgeSignals } from "./context.js";
-import { campaignHoldback, debugForcesTreatment, decodeCampaignArms, holdoutUnit } from "./holdout.js";
-import type { Action, Decision, EdgePlan, EdgeRequest, EvaluationTime, PageCriterion, Rule, RuleObject } from "./plan-types.js";
+import { campaignHoldback, drawVersion, requestAssignment, visitorMode } from "./assignment.js";
+import { ORIGINAL_ID } from "./plan-types.js";
+import type { Action, Campaign, Decision, EdgePlan, EdgeRequest, EvaluationTime, PageCriterion, PlanAbTest, PlanEntry, Rule, RuleObject, Step, VersionId } from "./plan-types.js";
+import { consentMissing } from "./request.js";
+import { heldSlots } from "./slots.js";
 import type { TouchState } from "./touch-cookie.js";
 
 // Mirrors the published browser rule vocabulary. Unknown browser inputs must never
@@ -215,7 +218,7 @@ function matchesObservedTouchQuery(history: [string, string] | undefined, rule: 
   return value === undefined ? UNKNOWN : matchesQueryValue(value, rule);
 }
 
-export function decide(plan: EdgePlan, request: EdgeRequest, touch: TouchState, now: EvaluationTime = new Date()): Decision[] {
+function createEvaluator(plan: EdgePlan, request: EdgeRequest, touch: TouchState, now: EvaluationTime) {
   const url = new URL(request.url);
   const query = Object.fromEntries(url.searchParams);
   const context = decodeContextCookie(request.headers.get("cookie") || "");
@@ -374,31 +377,90 @@ export function decide(plan: EdgePlan, request: EdgeRequest, touch: TouchState, 
     const path = normalize(criterion.path || "");
     return path.includes("*") ? new RegExp(`^${path.replace("*", ".*")}$`).test(normalize(url.pathname)) : path === normalize(url.pathname);
   });
-  // Arms follow the browser: a recorded arm (mirrored in `_rm_ctx.ca`) wins, then the shared
-  // holdout hash of the visitor unit. The holdout arm and an unknown arm leave the campaign to the
-  // browser, which keeps the original content for the holdout and records both arms' exposures.
-  // A debugger request always takes the treatment arm, as the browser does.
-  const forceTreatment = debugForcesTreatment(url);
-  const arms = decodeCampaignArms(context);
-  const unit = holdoutUnit(touch.u, context);
-  const decisions: Decision[] = [];
-  for (const campaign of plan.campaigns) {
-    if (!campaign.is_active || (!forceTreatment && campaignHoldback(campaign, arms, unit) !== false)) continue;
-    for (const variant of campaign.variants || []) {
-      if (rulesMatch(variant.rules) !== true) continue;
-      const actions: Action[] = [];
-      for (const action of variant.actions || []) {
-        // `campaign-experiment` operations run only once the treatment arm is assigned above.
-        const executable = action.edge?.supported === true || (action.edge?.reason === "campaign-experiment" && (action.edge.operations?.length ?? 0) > 0);
-        if (executable && matchesPage(action.page)) actions.push(action);
-      }
-      if (actions.length) decisions.push({ campaignId: campaign.id, variantId: variant.id, actions });
-    }
-  }
-  return decisions;
+  return { url, context, rulesMatch, matchesPage };
 }
 
-/** Flatten matched variants in published campaign, variant, then action order. */
-export function evaluatePlan(plan: EdgePlan, request: EdgeRequest, touch: TouchState, now: EvaluationTime = new Date()): Action[] {
-  return decide(plan, request, touch, now).flatMap(decision => decision.actions);
+interface WalkNode { campaignId: string; variantId: string; layer: Decision["layer"]; versionId?: VersionId; applies: { rank: number; action: Action }[] }
+/** `apply` writes the entries of `filter` (every entry when `null`); `hold` claims them; `cut` blocks every lower write. */
+type Outcome = { kind: "apply"; filter: VersionId | null; versionId?: VersionId } | { kind: "hold"; filter: VersionId | null } | { kind: "cut" };
+// 0.3 ignores `supported` and `reason`, compatibility shells for older evaluators: an entry with operations is executable.
+const executable = (entry: PlanEntry): entry is Action => Array.isArray(entry.edge?.operations) && entry.edge.operations.length > 0 && typeof entry.selector === "string" && entry.selector !== "";
+
+// Browser candidate order (`collectCandidates`): every active campaign's Original layer, then every
+// active campaign's audiences. Every writer the edge does not perform becomes a claim or a cut at
+// its own rank, so the transform can keep lower writes out of slots the browser still has to settle.
+function walk(plan: EdgePlan, request: EdgeRequest, touch: TouchState, now: EvaluationTime): { steps: Step[]; nodes: WalkNode[] } {
+  const steps: Step[] = [];
+  const nodes: WalkNode[] = [];
+  const header = request.headers.get("cookie") || "";
+  if (consentMissing(plan, header)) return { steps, nodes };
+  const { url, context, rulesMatch, matchesPage } = createEvaluator(plan, request, touch, now);
+  const assignment = requestAssignment(visitorMode(url, header), context, touch.u);
+  const hold = (entry: PlanEntry) => {
+    const slots = heldSlots(entry.edge);
+    if (typeof entry.selector !== "string" || !entry.selector || slots.includes("page")) steps.push({ kind: "cut" });
+    else if (slots.length) steps.push({ kind: "claim", selector: entry.selector, slots: slots.filter(slot => slot !== "page") });
+  };
+  const emit = (campaign: Campaign, variantId: string, layer: Decision["layer"], entries: PlanEntry[] | undefined, outcome: Outcome) => {
+    if (outcome.kind === "cut") { steps.push({ kind: "cut" }); return; }
+    const node: WalkNode = { campaignId: campaign.id, variantId, layer, ...(outcome.kind === "apply" && outcome.versionId ? { versionId: outcome.versionId } : {}), applies: [] };
+    for (const entry of Array.isArray(entries) ? entries : []) {
+      // Neither side writes an entry whose page criteria miss this URL, including one with no criteria.
+      if (!entry || typeof entry !== "object" || !matchesPage(entry.page)) continue;
+      if (outcome.filter !== null && Array.isArray(entry.versions) && !entry.versions.includes(outcome.filter)) continue;
+      if (outcome.kind === "apply" && executable(entry)) {
+        node.applies.push({ rank: steps.length, action: entry });
+        steps.push(Array.isArray(entry.versions) ? { kind: "apply", action: entry, versions: entry.versions } : { kind: "apply", action: entry });
+      } else hold(entry);
+    }
+    if (node.applies.length) nodes.push(node);
+  };
+  const running = (test: PlanAbTest | undefined): test is Extract<PlanAbTest, { state: "running" }> => test?.state === "running";
+  for (const campaign of plan.campaigns) {
+    const original = campaign.original;
+    if (!campaign.is_active || !original || typeof original !== "object") continue;
+    const test = original.abTest;
+    let outcome: Outcome | null;
+    if (!test) outcome = { kind: "apply", filter: null };
+    else if (assignment.mode === "debug") outcome = { kind: "cut" };
+    else if (test.state === "setup") outcome = null;
+    else if (running(test)) {
+      const version = drawVersion(campaign.id, ORIGINAL_ID, test, assignment);
+      outcome = version ? { kind: "apply", filter: version, versionId: version } : { kind: "hold", filter: null };
+    } else outcome = { kind: "hold", filter: null };
+    if (outcome) emit(campaign, ORIGINAL_ID, "original", original.actions, outcome);
+  }
+  for (const campaign of plan.campaigns) {
+    if (!campaign.is_active) continue;
+    let holdback: boolean | null | undefined;
+    for (const variant of campaign.variants || []) {
+      const eligible = rulesMatch(variant.rules);
+      if (eligible === false) continue;
+      // The browser never writes a held-back campaign, whatever its rules resolve to.
+      if (holdback === undefined) holdback = campaignHoldback(campaign, assignment);
+      if (holdback === true) continue;
+      const test = variant.abTest;
+      if (test && assignment.mode === "debug") { emit(campaign, variant.id, "audience", variant.actions, { kind: "cut" }); continue; }
+      const version = !test || test.state === "setup" ? "A" : running(test) ? drawVersion(campaign.id, variant.id, test, assignment) : null;
+      const decided = eligible === true && holdback === false && version !== null;
+      emit(campaign, variant.id, "audience", variant.actions, decided ? { kind: "apply", filter: version, ...(running(test) ? { versionId: version } : {}) } : { kind: "hold", filter: version });
+    }
+  }
+  return { steps, nodes };
+}
+
+/** Browser-ordered steps: all Original layers, then all audiences. Empty when consent is required and missing. */
+export function evaluatePlan(plan: EdgePlan, request: EdgeRequest, touch: TouchState, now: EvaluationTime = new Date()): Step[] {
+  return walk(plan, request, touch, now).steps;
+}
+
+/** Applies grouped per node, without a DOM: any claim or cut above an apply may overlap it, so that apply is dropped. */
+export function decide(plan: EdgePlan, request: EdgeRequest, touch: TouchState, now: EvaluationTime = new Date()): Decision[] {
+  const { steps, nodes } = walk(plan, request, touch, now);
+  let lastHold = -1;
+  steps.forEach((step, rank) => { if (step.kind !== "apply") lastHold = rank; });
+  return nodes.flatMap(({ applies, ...node }) => {
+    const actions = applies.filter(({ rank }) => rank > lastHold).map(({ action }) => action);
+    return actions.length ? [{ ...node, actions }] : [];
+  });
 }

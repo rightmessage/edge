@@ -47,6 +47,18 @@ export interface Modifications {
   visibility?: string;
   [key: string]: unknown;
 }
+export type VersionId = "A" | "B" | "C" | "D";
+/** The node id and `variantId` of a campaign's Original layer. */
+export const ORIGINAL_ID = "original";
+
+/** Weights are integers 1..99 summing to 100 over a subset of A..D that includes A. Anything else parses as invalid. */
+export type PlanAbTest =
+  | { id: string; state: "running"; run: string; weights: Partial<Record<VersionId, number>> }
+  | { id: string; state: "setup" };
+
+/** Wire slot families. `page` means the edge cannot locate the writer's elements. */
+export type Slot = "children" | "style" | "class" | "element" | "page" | `attr:${string}`;
+
 export interface Action {
   id?: string;
   actionId: string;
@@ -56,9 +68,23 @@ export interface Action {
   page?: PageCriterion[];
   selector: string;
   modifications?: Modifications;
+  /** Present only on a form that occurs in some, not all, versions of a running test. */
+  versions?: VersionId[];
   edge: EdgeSupport;
   [key: string]: unknown;
 }
+/** A write the browser owns. It is shipped so the edge can stay beneath it. */
+export interface BrowserOwnedAction {
+  actionId: string;
+  campaignId: string;
+  variantId: string;
+  page?: PageCriterion[];
+  selector?: string;
+  versions?: VersionId[];
+  edge: { supported: false; reason: "browser-owned"; operations: []; claims: Slot[]; [key: string]: unknown };
+  [key: string]: unknown;
+}
+export type PlanEntry = Action | BrowserOwnedAction;
 export interface Segment { id: string; [key: string]: unknown }
 export interface Signal {
   indicates: string;
@@ -76,17 +102,23 @@ export interface Dimension {
 export interface Variant {
   id: string;
   rules?: Rule;
-  actions?: Action[];
+  abTest?: PlanAbTest;
+  actions?: PlanEntry[];
   [key: string]: unknown;
 }
+/** Without `abTest` the layer is a deployed winner. */
+export interface OriginalLayer { abTest?: PlanAbTest; actions?: PlanEntry[] }
 export interface Campaign {
   id: string;
   is_active?: boolean;
+  original?: OriginalLayer;
   variants?: Variant[];
   [key: string]: unknown;
 }
 export interface EdgePlan {
-  version: 1;
+  /** `2` exactly when `consent` is `"required"`. */
+  version: 1 | 2;
+  consent?: "required";
   teamPid: string;
   connectionScope?: string;
   queryNames: string[];
@@ -94,7 +126,19 @@ export interface EdgePlan {
   campaigns: Campaign[];
   [key: string]: unknown;
 }
-export interface Decision { campaignId: string; variantId: string; actions: Action[] }
+/** Evaluator output in browser candidate order: the array index is the layer rank. */
+export type Step =
+  | { kind: "apply"; action: Action; versions?: VersionId[] }
+  | { kind: "claim"; selector: string; slots: Exclude<Slot, "page">[] }
+  | { kind: "cut" };
+export interface Decision {
+  campaignId: string;
+  variantId: string;
+  layer: "original" | "audience";
+  /** The drawn version of a running test. */
+  versionId?: VersionId;
+  actions: Action[];
+}
 /** Request facts supplied by an edge adapter; absent facts stay unknown. */
 export interface EdgeRequest extends Request {
   cf?: { timezone?: string; country?: string; city?: string; [key: string]: unknown };

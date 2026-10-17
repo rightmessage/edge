@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { decide } from "../src/edge-plan.ts";
-import { holdoutPoint, mintHoldoutUnit } from "../src/holdout.ts";
+import { holdoutPoint, mintHoldoutUnit } from "../src/assignment.ts";
 import { decodeTouchCookie, observeTouchCookie, TOUCH_COOKIE_NAME } from "../src/touch-cookie.ts";
 
 // Pinned in the RightMessage application's browser tests too: both implementations must agree.
@@ -63,11 +63,11 @@ test("the visitor id is a unit only beside a mirrored ledger; otherwise the brow
   assert.equal(applied({ is_enabled: false }, { edge: { ...action.edge, supported: true, reason: null } }), true);
 });
 
-test("experiment operations run only after assignment and never from other unsupported actions", () => {
+test("experiment operations run only after assignment, and an entry without operations never runs", () => {
   const touch = { q: {}, u: HELD_UNIT };
   assert.equal(applied({ is_enabled: true, withhold: 10 }, { touch }), true);
+  assert.equal(applied({ is_enabled: true, withhold: 30 }, { touch }), false);
   assert.equal(applied({ is_enabled: true, withhold: 10 }, { touch, edge: { ...action.edge, operations: [] } }), false);
-  assert.equal(applied({ is_enabled: true, withhold: 10 }, { touch, edge: { ...action.edge, reason: "browser-action" } }), false);
 });
 
 test("the touch cookie records a minted unit once, keeps it, and orders keys canonically", () => {

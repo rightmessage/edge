@@ -4,6 +4,7 @@ import { test } from 'vitest';
 import { decodeContextCookie, decodeEdgeSignals, edgeSignalBinding, edgeSignalsFresh } from '../src/context.ts';
 import { decodeTouchCookie } from '../src/touch-cookie.ts';
 import { decide, evaluatePlan } from '../src/edge-plan.ts';
+const appliedActions = (...args) => evaluatePlan(...args).flatMap(step => step.kind === 'apply' ? [step.action] : []);
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/conformance.json', import.meta.url), 'utf8'));
 for (const entry of fixture.cases) {
@@ -14,7 +15,7 @@ for (const entry of fixture.cases) {
     assert.deepEqual(context, entry.decodedContext);
     assert.deepEqual(touch, entry.decodedTouch);
     assert.deepEqual(Object.fromEntries(decodeEdgeSignals(context.es, entry.snapshotIdentity)), entry.snapshotOutcomes);
-    assert.deepEqual(evaluatePlan(entry.plan, request, touch, entry.now).map(action => action.actionId), entry.actionIds);
+    assert.deepEqual(appliedActions(entry.plan, request, touch, entry.now).map(action => action.actionId), entry.actionIds);
     assert.deepEqual(decide(entry.plan, request, touch, entry.now).map(({ campaignId, variantId, actions }) => ({ campaignId, variantId, actionIds: actions.map(action => action.actionId) })), entry.decisions);
   });
 }
@@ -66,7 +67,7 @@ test('contradictory profile and page outcomes are removed rather than guessed', 
 test('origin or active connection changes cannot reuse landing or profile winners', () => {
   const touch = entry.decodedTouch;
   const sibling = new Request('https://shop.example.com/offer', { headers: { cookie: entry.cookie } });
-  assert.deepEqual(evaluatePlan(entry.plan, sibling, touch, entry.now).map(action => action.actionId), ['profile-copy', 'answered-copy', 'attributed-copy']);
+  assert.deepEqual(appliedActions(entry.plan, sibling, touch, entry.now).map(action => action.actionId), ['profile-copy', 'answered-copy', 'attributed-copy']);
   const replaced = { ...entry.plan, connectionScope: 'replacement' };
-  assert.deepEqual(evaluatePlan(replaced, new Request(entry.url, { headers: { cookie: entry.cookie } }), touch, entry.now).map(action => action.actionId), ['answered-copy', 'attributed-copy']);
+  assert.deepEqual(appliedActions(replaced, new Request(entry.url, { headers: { cookie: entry.cookie } }), touch, entry.now).map(action => action.actionId), ['answered-copy', 'attributed-copy']);
 });

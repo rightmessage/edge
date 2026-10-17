@@ -1,6 +1,7 @@
 import { decodeHTML, decodeHTMLAttribute, escapeAttribute } from "entities";
 import { boundedBytes, OUTPUT_CAP } from "./bytes.js";
-import type { Action, Release } from "./plan-types.js";
+import type { Action, Release, Slot, Step, VersionId } from "./plan-types.js";
+import { operationSlot, slotsIntersect } from "./slots.js";
 import type { HTMLRewriterConstructor, HTMLRewriterInstance, RewriterElement, RewriterElementHandlers } from "./rewriter-types.js";
 
 const TARGET = "data-rm-edge-target";
@@ -44,6 +45,8 @@ export interface Receipt {
   actionId: string;
   targetId: string;
   operations: string[];
+  /** The versions of a running test whose form this was; absent on untested and version-independent actions. */
+  versions?: VersionId[];
 }
 
 // Minimal inline-style editing: declarations are kept in order and only the edited property is
@@ -190,33 +193,121 @@ function declaredModifications(action: Action) {
   };
 }
 
-// Selectors are matched once against the original document. An action whose selector reads an
-// attribute an earlier action writes could match differently in the browser's sequential
-// application, so it stays browser-owned.
-function edgeApplicable(actions: readonly Action[], modifications: Modifications[]) {
+// Selectors are matched once against the original document. An apply whose selector reads an
+// attribute that an earlier step writes could match differently in the browser's sequential
+// application, so it stays browser-owned. A cut or an `element` claim may write any attribute.
+function edgeApplicable(steps: readonly Step[], modifications: Modifications[]) {
   const written = new Set<string>();
-  return actions.map((action, index) => {
-    const selector = action.selector.toLowerCase();
+  let writesAny = false;
+  const applicable: boolean[] = [];
+  for (const step of steps) {
+    if (step.kind === "cut") { writesAny = true; continue; }
+    if (step.kind === "claim") {
+      for (const slot of step.slots) {
+        if (slot === "element") writesAny = true;
+        else if (slot === "class" || slot === "style") written.add(slot);
+        else if (slot.startsWith("attr:")) written.add(slot.slice(5).toLowerCase());
+      }
+      continue;
+    }
+    const selector = step.action.selector.toLowerCase();
     const reads = (name: string) => (name === "class" && /\.[a-z_-]/i.test(selector)) || (name === "id" && selector.includes("#")) || new RegExp(`\\[\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(selector);
-    const applicable = ![...written].some(reads);
-    const mods = modifications[index];
+    applicable.push(!(writesAny && /[.#[]/.test(selector)) && ![...written].some(reads));
+    const mods = modifications[applicable.length - 1];
     for (const [name] of mods.attr) written.add(name.toLowerCase());
     if (mods.style.length || mods.hide) written.add("style");
     if (mods.classes) written.add("class");
-    return applicable;
-  });
+  }
+  return applicable;
 }
 
-// Identifies targets identically in every pass: ids follow first-match document order, and
-// content inside a target whose children are replaced by `text` is never personalized.
-function registerTargets(rewriter: HTMLRewriterInstance, closer: ReturnType<typeof createCloser>, actions: readonly Action[], applicable: boolean[], onTarget: (element: RewriterElement, id: string, index: number, first: boolean) => boolean, onText: (index: number) => RewriterElementHandlers["text"] | null = () => null) {
+/** The applies of a step list and what every pass needs to identify their targets identically. */
+interface Layout {
+  actions: Action[];
+  modifications: Modifications[];
+  /** Selector-safe and not beneath a cut. */
+  applicable: boolean[];
+  /** `index:match` pairs the probe left to the browser; `match` counts elements matched by any applicable selector. */
+  vetoed: Set<string>;
+}
+/** A higher writer the edge does not perform: a claim step, or an apply's own deferred operations. */
+interface Hold { rank: number; selector: string; slots: readonly Slot[] }
+interface ProbeElement { match: number; applies: number[]; holds: number[]; ancestors: ProbeElement[] }
+
+// One read-only pass over the original bytes. Apply i on element E is vetoed when a hold of a
+// higher rank matches E with an intersecting slot family, matches an ancestor of E and claims
+// its children or the whole element, or matches a descendant of E while i writes E's children.
+// Only lower ranks are vetoed: the browser marks a slot unknown only for candidates beneath a
+// later undecided writer. Text and find/replace on one target are both left to the browser.
+async function probeVetoes(bytes: Uint8Array<ArrayBuffer>, layout: Omit<Layout, "vetoed">, ranks: number[], holds: Hold[], Rewriter: HTMLRewriterConstructor, rewrite: Rewrite) {
+  const { actions, modifications, applicable } = layout;
+  const selectors = actions.flatMap((action, index) => applicable[index] ? [action.selector] : []);
+  const vetoed = new Set<string>();
+  if (!selectors.length) return vetoed;
+  const probe = new Rewriter();
+  const elements: ProbeElement[] = [];
+  const open: ProbeElement[] = [];
+  let current: ProbeElement | null = null;
+  let match = 0;
+  probe.on([...selectors, ...holds.map(hold => hold.selector)].join(","), { element(element) {
+    const record: ProbeElement = { match: 0, applies: [], holds: [], ancestors: [...open] };
+    current = record;
+    elements.push(record);
+    open.push(record);
+    // An element whose end tag is implied stays open, so it over-approximates later ancestry: more vetoes, never fewer.
+    try { element.onEndTag(() => { open.splice(open.lastIndexOf(record), 1); }); } catch { open.pop(); }
+  } });
+  probe.on(selectors.join(","), { element() { if (current) current.match = ++match; } });
+  actions.forEach((action, index) => {
+    if (applicable[index]) probe.on(action.selector, { element() { current?.applies.push(index); } });
+  });
+  holds.forEach((hold, index) => probe.on(hold.selector, { element() { current?.holds.push(index); } }));
+  await rewrite(bytes, probe);
+
+  const nested = new Map<ProbeElement, number[]>();
+  for (const element of elements) {
+    for (const ancestor of element.ancestors) nested.set(ancestor, [...(nested.get(ancestor) ?? []), ...element.holds]);
+  }
+  for (const element of elements) {
+    if (!element.applies.length) continue;
+    const inherited = element.ancestors.flatMap(ancestor => ancestor.holds).filter(index => holds[index].slots.includes("children") || holds[index].slots.includes("element"));
+    const descendants = nested.get(element) ?? [];
+    const kept: number[] = [];
+    for (const index of element.applies) {
+      const slots = [...new Set((actions[index].edge.operations || []).map(operationSlot))];
+      const higher = (hold: number) => holds[hold].rank > ranks[index];
+      const blocked = element.holds.some(hold => higher(hold) && slotsIntersect(holds[hold].slots, slots))
+        || inherited.some(higher)
+        || (slots.includes("children") && descendants.some(higher));
+      if (blocked) vetoed.add(`${index}:${element.match}`);
+      else kept.push(index);
+    }
+    const content = kept.filter(index => modifications[index].text !== null || modifications[index].findReplace);
+    if (content.some(index => modifications[index].text !== null) && content.some(index => modifications[index].findReplace)) {
+      for (const index of content) vetoed.add(`${index}:${element.match}`);
+    }
+  }
+  return vetoed;
+}
+
+// Identifies targets identically in every pass: ids follow first-match document order over the
+// pairs that apply, and content inside a target whose children are replaced by `text` is never
+// personalized.
+function registerTargets(rewriter: HTMLRewriterInstance, closer: ReturnType<typeof createCloser>, layout: Layout, onTarget: (element: RewriterElement, id: string, index: number, first: boolean) => boolean, onText: (index: number) => RewriterElementHandlers["text"] | null = () => null) {
+  const { actions, applicable, vetoed } = layout;
   const regions: string[] = [];
   let nextId = 0;
   let current: string | null = null;
+  let match = 0;
+  const selectors = actions.flatMap((action, index) => applicable[index] ? [action.selector] : []);
+  if (!selectors.length) return () => false;
+  // Counts matches exactly as the probe does, so a vetoed pair names the same element in every pass.
+  rewriter.on(selectors.join(","), { element() { match++; } });
   actions.forEach((action, index) => {
     if (!applicable[index]) return;
     closer.watch(action.selector);
     const handlers: RewriterElementHandlers = { element(element) {
+      if (vetoed.has(`${index}:${match}`)) return;
       let id = element.getAttribute(TARGET);
       if (regions.length && (id === null || regions.at(-1) !== id)) return;
       let first = false;
@@ -240,12 +331,12 @@ function registerTargets(rewriter: HTMLRewriterInstance, closer: ReturnType<type
   return () => regions.length > 0;
 }
 
-async function captureOriginalHTML(bytes: Uint8Array<ArrayBuffer>, actions: readonly Action[], applicable: boolean[], modifications: Modifications[], ids: Set<string>, Rewriter: HTMLRewriterConstructor, rewrite: Rewrite) {
+async function captureOriginalHTML(bytes: Uint8Array<ArrayBuffer>, layout: Layout, ids: Set<string>, Rewriter: HTMLRewriterConstructor, rewrite: Rewrite) {
   const nonce = crypto.randomUUID();
   const capture = new Rewriter();
   const raw = rawTextContext(capture);
   const closer = createCloser(raw);
-  registerTargets(capture, closer, actions, applicable, (element, id, index, first) => {
+  registerTargets(capture, closer, layout, (element, id, index, first) => {
     if (first) {
       element.setAttribute(TARGET, id);
       if (ids.has(id)) {
@@ -253,7 +344,7 @@ async function captureOriginalHTML(bytes: Uint8Array<ArrayBuffer>, actions: read
         element.append(`<!--rm-${nonce}-${id}-e-->`, { html: true });
       }
     }
-    return !!modifications[index].text;
+    return !!layout.modifications[index].text;
   });
   // Runs after every target handler for the element, so identification never reaches output.
   closer.install(capture, element => element.removeAttribute(TARGET));
@@ -268,20 +359,55 @@ async function captureOriginalHTML(bytes: Uint8Array<ArrayBuffer>, actions: read
   return html;
 }
 
+// Text and find/replace on one target cannot both be reproduced in one streaming pass. Only the
+// probe can tell that two selectors name one element, so the first pass is optimistic.
+const CONTENT_CONFLICT = "Text and find/replace on one target";
+
+export async function transformHTML(bytes: Uint8Array<ArrayBuffer>, steps: readonly Step[], release: Release, Rewriter: HTMLRewriterConstructor): Promise<Uint8Array<ArrayBuffer> | null> {
+  const rewrite: Rewrite = async (input, rewriter) => boundedBytes(rewriter.transform(new Response(input, { headers: { "content-type": "text/html; charset=utf-8" } })), OUTPUT_CAP);
+  const actions: Action[] = [];
+  const ranks: number[] = [];
+  const versions: (VersionId[] | undefined)[] = [];
+  const holds: Hold[] = [];
+  let lastCut = -1;
+  steps.forEach((step, rank) => {
+    if (step.kind === "cut") lastCut = rank;
+    else if (step.kind === "claim") holds.push({ rank, selector: step.selector, slots: step.slots });
+    else {
+      actions.push(step.action);
+      ranks.push(rank);
+      versions.push(step.versions);
+      const deferred = (step.action.edge.deferredOperations || []).map(operationSlot);
+      if (deferred.length) holds.push({ rank, selector: step.action.selector, slots: [...new Set(deferred)] });
+    }
+  });
+  const modifications = actions.map(declaredModifications);
+  // A cut is a writer the edge cannot locate: every lower apply stays with the browser.
+  const applicable = edgeApplicable(steps, modifications).map((safe, index) => safe && ranks[index] > lastCut);
+  const lowest = ranks.find((_rank, index) => applicable[index]) ?? Infinity;
+  const probe = () => probeVetoes(bytes, { actions, modifications, applicable }, ranks, holds, Rewriter, rewrite);
+  const probed = holds.some(hold => hold.rank > lowest);
+  const layout: Layout = { actions, modifications, applicable, vetoed: probed ? await probe() : new Set() };
+  try {
+    return await rewriteDocument(bytes, layout, versions, release, Rewriter, rewrite);
+  } catch (error) {
+    if (probed || !(error instanceof Error) || error.message !== CONTENT_CONFLICT) throw error;
+    return rewriteDocument(bytes, { ...layout, vetoed: await probe() }, versions, release, Rewriter, rewrite);
+  }
+}
+
 // One rewriting pass applies every action. Text-node replacements, receipts and success stamps
 // are resolved as the stream completes, then committed by exact substitutions in the buffered
 // output; a capture pass over the original bytes runs only when a find/replace empties a text
 // node, the one case that needs original inner HTML the rewritten stream cannot provide.
-export async function transformHTML(bytes: Uint8Array<ArrayBuffer>, actions: readonly Action[], release: Release, Rewriter: HTMLRewriterConstructor): Promise<Uint8Array<ArrayBuffer> | null> {
-  const rewrite: Rewrite = async (input, rewriter) => boundedBytes(rewriter.transform(new Response(input, { headers: { "content-type": "text/html; charset=utf-8" } })), OUTPUT_CAP);
+async function rewriteDocument(bytes: Uint8Array<ArrayBuffer>, layout: Layout, versions: (VersionId[] | undefined)[], release: Release, Rewriter: HTMLRewriterConstructor, rewrite: Rewrite): Promise<Uint8Array<ArrayBuffer> | null> {
+  const { actions, modifications } = layout;
   const encoder = new TextEncoder();
   let baselineBytes = 0;
   const reserveBaseline = (value: string) => {
     baselineBytes += encoder.encode(value).byteLength;
     if (baselineBytes > OUTPUT_CAP) throw new Error("Personalization baseline limit");
   };
-  const modifications = actions.map(declaredModifications);
-  const applicable = edgeApplicable(actions, modifications);
   const nonce = crypto.randomUUID();
   const stamp = `data-rm-stamp-${nonce}`;
   const targets = new Map<string, Target>();
@@ -311,7 +437,7 @@ export async function transformHTML(bytes: Uint8Array<ArrayBuffer>, actions: rea
       if (openByAction[index].length) (pending ||= { source: "", actions: new Set() }).actions.add(index);
     };
   };
-  const insideRegion = registerTargets(rewriter, closer, actions, applicable, (element, id, index, first) => {
+  const insideRegion = registerTargets(rewriter, closer, layout, (element, id, index, first) => {
     const action = actions[index];
     const mods = modifications[index];
     let target = targets.get(id)!;
@@ -332,13 +458,13 @@ export async function transformHTML(bytes: Uint8Array<ArrayBuffer>, actions: rea
     const attribute = (name: string) => pair.attributes.add(name);
     const changed = (operation: string) => { pair.changed = true; pair.applied.add(operation); };
     if (mods.findReplace) {
-      if (target.text !== null) throw new Error("Find/replace after content replacement");
+      if (target.text !== null) throw new Error(CONTENT_CONFLICT);
       target.findReplace = true;
       openByAction[index].push(id);
       closer.onClose(() => openByAction[index].splice(openByAction[index].lastIndexOf(id), 1));
     } else if (mods.text !== null) {
       if (target.void) throw new Error("Cannot replace void element content");
-      if (target.findReplace) throw new Error("Content replacement after find/replace");
+      if (target.findReplace) throw new Error(CONTENT_CONFLICT);
       if (target.text === null) {
         element.prepend(`<!--rm-${nonce}-${id}-s-->`, { html: true });
         element.append(`<!--rm-${nonce}-${id}-e-->`, { html: true });
@@ -447,7 +573,8 @@ export async function transformHTML(bytes: Uint8Array<ArrayBuffer>, actions: rea
     if (pair.changed) {
       attribute("data-rm-personalized"); attribute("data-rm-variant");
       successes.set(pair.id, pair.action.variantId);
-      receipts.push({ campaignId: pair.action.campaignId, variantId: pair.action.variantId, actionId: pair.action.actionId, targetId: pair.id, operations: [...pair.applied] });
+      const tested = versions[pair.index];
+      receipts.push({ campaignId: pair.action.campaignId, variantId: pair.action.variantId, actionId: pair.action.actionId, targetId: pair.id, operations: [...pair.applied], ...(tested ? { versions: [...tested] } : {}) });
     }
   }
   if (!receipts.length) return null;
@@ -460,7 +587,7 @@ export async function transformHTML(bytes: Uint8Array<ArrayBuffer>, actions: rea
     if (!Object.hasOwn(original, "html") && original.textNodes.length && (target.containsRegion || target.emptiedNode)) throw new Error("Personalized text structure changed");
   }
   if (needsHTML.size) {
-    const captured = await captureOriginalHTML(bytes, actions, applicable, modifications, needsHTML, Rewriter, rewrite);
+    const captured = await captureOriginalHTML(bytes, layout, needsHTML, Rewriter, rewrite);
     for (const [id, html] of captured) { reserveBaseline(html); originals[id].html = html; }
   }
 

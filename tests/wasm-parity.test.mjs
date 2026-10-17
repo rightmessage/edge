@@ -9,15 +9,16 @@ import { HTMLRewriter } from "../src/wasm.ts";
 const revision = "a".repeat(64);
 const release = { version: 1, teamPid: "demo-team", revision, planUrl: `https://tags.example/demo-team/revisions/${revision}/plan.json`, loaderUrl: `https://tags.example/demo-team.js?revision=${revision}` };
 const action = (selector, modifications, id = "one") => ({ campaignId: "campaign", variantId: `variant-${id}`, actionId: id, selector, modifications, edge: { operations: Object.keys(modifications).flatMap(key => ["attr", "style"].includes(key) ? Object.keys(modifications[key]).map(name => `${key}:${name}`) : [key]) } });
+const applies = actions => actions.map(action => ({ kind: "apply", action }));
 const page = body => `<!doctype html><html><head><title>Unchanged &amp; exact</title></head><body>${body}</body></html>`;
 const receipt = html => JSON.parse(html.match(/<script type="application\/json" id="RM_EDGE">([\s\S]*?)<\/script>/)[1]);
 let native;
 beforeAll(async () => {
   const bundled = await build({ stdin: { contents: `import { transformHTML } from './src/transform.ts';
 export default { async fetch(request) {
- const { html, actions, release } = await request.json();
+ const { html, steps, release } = await request.json();
  try {
-  const output = await transformHTML(new TextEncoder().encode(html), actions, release, HTMLRewriter);
+  const output = await transformHTML(new TextEncoder().encode(html), steps, release, HTMLRewriter);
   return Response.json({ output: output === null ? null : new TextDecoder().decode(output) });
  } catch (error) { return Response.json({ error: error.message }); }
 }};`, resolveDir: fileURLToPath(new URL("..", import.meta.url)) }, bundle: true, write: false, format: "esm", platform: "browser" });
@@ -96,9 +97,9 @@ const fixtures = [
 ];
 
 for (const fixture of fixtures) test(`native/WASM byte parity: ${fixture.name}`, async () => {
-  const expected = await (await native.dispatchFetch("https://test.example/", { method: "POST", body: JSON.stringify({ ...fixture, release }) })).json();
+  const expected = await (await native.dispatchFetch("https://test.example/", { method: "POST", body: JSON.stringify({ ...fixture, steps: applies(fixture.actions), release }) })).json();
   assert.equal(expected.error, undefined);
-  const actual = await transformHTML(new TextEncoder().encode(fixture.html), fixture.actions, release, HTMLRewriter);
+  const actual = await transformHTML(new TextEncoder().encode(fixture.html), applies(fixture.actions), release, HTMLRewriter);
   assert.notEqual(actual, null);
   assert.deepEqual(Buffer.from(actual), Buffer.from(expected.output));
   const html = new TextDecoder().decode(actual);
@@ -110,13 +111,13 @@ for (const fixture of [
   { name: "unsafe raw closing tag", html: page("<script>old</script>"), actions: [action("script", { findReplace: [{ find: "old", replace: "</script>" }] })], error: "Raw text cannot be safely serialized" },
   { name: "missing head", html: "<h1>old</h1>", actions: [action("h1", { text: "new" })], error: "Missing bootstrap insertion point" },
 ]) test(`native/WASM failure parity: ${fixture.name}`, async () => {
-  const expected = await (await native.dispatchFetch("https://test.example/", { method: "POST", body: JSON.stringify({ ...fixture, release }) })).json();
+  const expected = await (await native.dispatchFetch("https://test.example/", { method: "POST", body: JSON.stringify({ ...fixture, steps: applies(fixture.actions), release }) })).json();
   if (fixture.error) {
     assert.equal(expected.error, fixture.error);
-    await assert.rejects(transformHTML(new TextEncoder().encode(fixture.html), fixture.actions, release, HTMLRewriter), { message: fixture.error });
+    await assert.rejects(transformHTML(new TextEncoder().encode(fixture.html), applies(fixture.actions), release, HTMLRewriter), { message: fixture.error });
   } else {
     assert.equal(expected.output, null);
-    assert.equal(await transformHTML(new TextEncoder().encode(fixture.html), fixture.actions, release, HTMLRewriter), null);
+    assert.equal(await transformHTML(new TextEncoder().encode(fixture.html), applies(fixture.actions), release, HTMLRewriter), null);
   }
 });
 

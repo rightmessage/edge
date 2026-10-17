@@ -6,8 +6,9 @@ import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { evaluatePlan } from "../src/edge-plan.ts";
+const appliedActions = (...args) => evaluatePlan(...args).flatMap(step => step.kind === "apply" ? [step.action] : []);
 import { edgeSignalBinding } from "../src/context.ts";
-import { holdoutPoint } from "../src/holdout.ts";
+import { holdoutPoint } from "../src/assignment.ts";
 
 let mf;
 const revision = "a".repeat(64);
@@ -18,7 +19,7 @@ const contextCookie = payload => Buffer.from(JSON.stringify({ v: 1, ...payload }
 const evaluateDate = (definition, timeZone, now) => {
   const request = new Request("https://rightmessage.com/");
   Object.defineProperty(request, "cf", { value: timeZone === undefined ? {} : { timezone: timeZone } });
-  return evaluatePlan(
+  return appliedActions(
     plan([action("h1", { text: "matched" })], { ...definition, edge: { supported: true, reason: null } }),
     request,
     { q: {} },
@@ -240,21 +241,21 @@ test("sanitized production plan resolves anonymous query branches and defers ide
   const rendered = await run({ plan: mixedSignalPlan });
   assert.equal(rendered.headers["x-rm-edge"], "applied");
   assert.match(rendered.html, />SaaS<\/h1>/);
-  const anonymousSaas = evaluatePlan(
+  const anonymousSaas = appliedActions(
     mixedSignalPlan,
     new Request("https://rightmessage.com/?biz=saas"),
     { q: { biz: ["saas", "saas"] } },
   );
   assert.deepEqual(anonymousSaas.map(item => item.actionId), ["action_saas"]);
 
-  const anonymousEcommerce = evaluatePlan(
+  const anonymousEcommerce = appliedActions(
     mixedSignalPlan,
     new Request("https://rightmessage.com/?biz=ecommerce"),
     { q: { biz: ["ecommerce", "ecommerce"] } },
   );
   assert.deepEqual(anonymousEcommerce.map(item => item.actionId), ["action_ecommerce"]);
 
-  const identified = evaluatePlan(
+  const identified = appliedActions(
     mixedSignalPlan,
     new Request("https://rightmessage.com/?biz=ecommerce", {
       headers: { cookie: `_rm_ctx=${contextCookie({ cid: "sanitized-contact", pid: "bento" })}` },
@@ -276,7 +277,7 @@ const identifiedCookie = ({ outcomes = {}, page = {}, origin = "https://rightmes
   if (Object.keys(page).length) { const [ht, hf] = lists(page); Object.assign(es, { h: edgeSignalBinding(bound.project, bound.origin, bound.cid), ht, hf }); }
   return `_rm_ctx=${contextCookie({ cid, pid: "bento", identityScope: { project, connection }, es: { ...es, ...override } })}`;
 };
-const businessActions = (cookie, biz) => evaluatePlan(
+const businessActions = (cookie, biz) => appliedActions(
   mixedSignalPlan,
   new Request(`https://rightmessage.com/${biz ? `?biz=${biz}` : ""}`, { headers: { cookie } }),
   biz ? { q: { biz: [biz, biz] } } : { q: {} },
@@ -319,12 +320,12 @@ test("a snapshot from another identity or connection, an unrecorded or republish
   // A republished SaaS rule gets a new key, which no earlier snapshot holds.
   const republished = structuredClone(mixedSignalPlan);
   republished.dimensions[0].signals[0].definition.or[0].and[0].edge.key = "Nw123456";
-  const actions = evaluatePlan(republished, new Request("https://rightmessage.com/?biz=ecommerce", { headers: { cookie: identifiedCookie({ outcomes }) } }), { q: { biz: ["ecommerce", "ecommerce"] } });
+  const actions = appliedActions(republished, new Request("https://rightmessage.com/?biz=ecommerce", { headers: { cookie: identifiedCookie({ outcomes }) } }), { q: { biz: ["ecommerce", "ecommerce"] } });
   assert.deepEqual(actions, []);
   // A plan without an active connection (compiled before this change) never uses a snapshot.
   const unscoped = structuredClone(mixedSignalPlan);
   delete unscoped.connectionScope;
-  assert.deepEqual(evaluatePlan(unscoped, new Request("https://rightmessage.com/?biz=ecommerce", { headers: { cookie: identifiedCookie({ outcomes }) } }), { q: { biz: ["ecommerce", "ecommerce"] } }), []);
+  assert.deepEqual(appliedActions(unscoped, new Request("https://rightmessage.com/?biz=ecommerce", { headers: { cookie: identifiedCookie({ outcomes }) } }), { q: { biz: ["ecommerce", "ecommerce"] } }), []);
   assert.deepEqual(businessActions(identifiedCookie({ outcomes }), "ecommerce"), ["action_ecommerce"]);
 });
 
@@ -333,7 +334,7 @@ test("a snapshot written on one subdomain decides profile rules on siblings and 
   const withLanding = structuredClone(mixedSignalPlan);
   withLanding.dimensions[0].signals[0].definition.or.push({ and: [{ $source: "pageviews", $type: "landingpage", operator: "equals", value: "/integrations/kit", edge: { supported: false, reason: "browser-signal", key: "Land0001" } }] });
   const written = identifiedCookie({ outcomes: { [KEY.saas]: false, [KEY.ecommerce]: true, [KEY.education]: false }, page: { Land0001: true }, origin: "https://www.rightmessage.com" });
-  const actions = (host) => evaluatePlan(withLanding, new Request(`https://${host}/`, { headers: { cookie: written } }), { q: {} }).map(item => item.actionId);
+  const actions = (host) => appliedActions(withLanding, new Request(`https://${host}/`, { headers: { cookie: written } }), { q: {} }).map(item => item.actionId);
   // On the recording origin the landing page makes SaaS win.
   assert.deepEqual(actions("www.rightmessage.com"), ["action_saas"]);
   // Elsewhere the landing page is unknown, so the earlier SaaS segment defers (it is not misapplied as true or false).
@@ -342,7 +343,7 @@ test("a snapshot written on one subdomain decides profile rules on siblings and 
   // Without a landing-page rule, the ESP outcomes alone decide on every sibling and the apex.
   const espOnly = identifiedCookie({ outcomes: { [KEY.saas]: false, [KEY.ecommerce]: true, [KEY.education]: false }, page: { Land0001: true }, origin: "https://www.rightmessage.com" });
   for (const host of ["www.rightmessage.com", "rightmessage.com", "blog.rightmessage.com"]) {
-    assert.deepEqual(evaluatePlan(mixedSignalPlan, new Request(`https://${host}/`, { headers: { cookie: espOnly } }), { q: {} }).map(item => item.actionId), ["action_ecommerce"], host);
+    assert.deepEqual(appliedActions(mixedSignalPlan, new Request(`https://${host}/`, { headers: { cookie: espOnly } }), { q: {} }).map(item => item.actionId), ["action_ecommerce"], host);
   }
 });
 
@@ -350,7 +351,7 @@ test("a snapshot is honored up to 30 days old and ignored when older, future-dat
   const now = "2026-10-02T12:00:00.000Z";
   const today = Math.floor(Date.parse(now) / 86400000);
   const outcomes = { [KEY.saas]: true, [KEY.ecommerce]: false, [KEY.education]: false };
-  const actions = (options) => evaluatePlan(mixedSignalPlan, new Request("https://rightmessage.com/", { headers: { cookie: identifiedCookie({ outcomes, ...options }) } }), { q: {} }, now).map(item => item.actionId);
+  const actions = (options) => appliedActions(mixedSignalPlan, new Request("https://rightmessage.com/", { headers: { cookie: identifiedCookie({ outcomes, ...options }) } }), { q: {} }, now).map(item => item.actionId);
   for (const age of [0, 29, 30]) assert.deepEqual(actions({ day: today - age }), ["action_saas"], `age ${age}`);
   for (const [label, options] of [["31 days", { day: today - 31 }], ["future-dated", { day: today + 1 }], ["unstamped", { es: { d: undefined } }], ["non-integer", { es: { d: String(today) } }]]) {
     assert.deepEqual(actions(options), [], label);
@@ -361,7 +362,7 @@ test("a recorded landing-page outcome lets an identified contact's later segment
   // SaaS also matches a landing page. An identified contact uses the snapshot, not the request path.
   const withLanding = structuredClone(mixedSignalPlan);
   withLanding.dimensions[0].signals[0].definition.or.push({ and: [{ $source: "pageviews", $type: "landingpage", operator: "equals", value: "/integrations/kit", edge: { supported: false, reason: "browser-signal", key: "Land0001" } }] });
-  const actions = (options, biz) => evaluatePlan(withLanding, new Request(`https://rightmessage.com/?biz=${biz}`, { headers: { cookie: identifiedCookie(options) } }), { q: { biz: [biz, biz] } }).map(item => item.actionId);
+  const actions = (options, biz) => appliedActions(withLanding, new Request(`https://rightmessage.com/?biz=${biz}`, { headers: { cookie: identifiedCookie(options) } }), { q: { biz: [biz, biz] } }).map(item => item.actionId);
   const esp = { [KEY.saas]: false, [KEY.ecommerce]: false, [KEY.education]: false };
   assert.deepEqual(actions({ outcomes: esp }, "ecommerce"), []);
   assert.deepEqual(actions({ outcomes: esp, page: { Land0001: false } }, "ecommerce"), ["action_ecommerce"]);
@@ -370,16 +371,16 @@ test("a recorded landing-page outcome lets an identified contact's later segment
   assert.deepEqual(actions({ outcomes: esp, page: { Land0001: false }, origin: "https://blog.rightmessage.com" }, "ecommerce"), []);
   assert.deepEqual(actions({ outcomes: esp, page: { Land0001: false }, origin: "https://rightmessage.com:8443" }, "ecommerce"), []);
   // An identified contact does not fall back to the touch landing path when the snapshot omitted the key.
-  const identifiedWithLanding = evaluatePlan(withLanding, new Request("https://rightmessage.com/?biz=ecommerce", { headers: { cookie: identifiedCookie({ outcomes: esp }) } }), { q: { biz: ["ecommerce", "ecommerce"] }, r: "", l: "/" });
+  const identifiedWithLanding = appliedActions(withLanding, new Request("https://rightmessage.com/?biz=ecommerce", { headers: { cookie: identifiedCookie({ outcomes: esp }) } }), { q: { biz: ["ecommerce", "ecommerce"] }, r: "", l: "/" });
   assert.deepEqual(identifiedWithLanding, []);
   // No recorded landing path: the current URL is not the first page, so the leaf stays unknown.
-  const anonymous = evaluatePlan(withLanding, new Request("https://rightmessage.com/?biz=ecommerce"), { q: { biz: ["ecommerce", "ecommerce"] }, r: "" });
+  const anonymous = appliedActions(withLanding, new Request("https://rightmessage.com/?biz=ecommerce"), { q: { biz: ["ecommerce", "ecommerce"] }, r: "" });
   assert.deepEqual(anonymous, []);
   // A recorded landing path that is not this rule lets the later query win. The rule's own path wins instead.
   const touch = (l) => ({ q: { biz: ["ecommerce", "ecommerce"] }, r: "", l });
-  assert.deepEqual(evaluatePlan(withLanding, new Request("https://rightmessage.com/?biz=ecommerce"), touch("/")).map(item => item.actionId), ["action_ecommerce"]);
-  assert.deepEqual(evaluatePlan(withLanding, new Request("https://rightmessage.com/use-cases/saas?biz=ecommerce"), touch("/integrations/kit")).map(item => item.actionId), ["action_saas"]);
-  assert.deepEqual(evaluatePlan(withLanding, new Request("https://rightmessage.com/pricing"), touch("/integrations/kit/")).map(item => item.actionId), ["action_saas"]);
+  assert.deepEqual(appliedActions(withLanding, new Request("https://rightmessage.com/?biz=ecommerce"), touch("/")).map(item => item.actionId), ["action_ecommerce"]);
+  assert.deepEqual(appliedActions(withLanding, new Request("https://rightmessage.com/use-cases/saas?biz=ecommerce"), touch("/integrations/kit")).map(item => item.actionId), ["action_saas"]);
+  assert.deepEqual(appliedActions(withLanding, new Request("https://rightmessage.com/pricing"), touch("/integrations/kit/")).map(item => item.actionId), ["action_saas"]);
 });
 
 test("a cookieless ad landing renders the later business and ESP segments and keeps that landing path", async () => {
@@ -463,7 +464,7 @@ test("anonymous integration leaves match the browser's empty profile, including 
     copy.dimensions[0].signals[0].definition.or[0].and[0] = { ...leaf, edge: { supported: false, reason: "integration-signal" } };
     return copy;
   };
-  const ecommerce = (planValue, cookie) => evaluatePlan(
+  const ecommerce = (planValue, cookie) => appliedActions(
     planValue,
     new Request("https://rightmessage.com/?biz=ecommerce", cookie ? { headers: { cookie } } : {}),
     { q: { biz: ["ecommerce", "ecommerce"] } },
@@ -744,8 +745,8 @@ test("an unobserved referrer cannot select direct or negated referral winners", 
   const target = action("h1", { text: "direct visitor" });
   const request = new Request("https://rightmessage.com/pricing", { headers: { referer: "https://rightmessage.com/" } });
   for (const definition of [{ $source: "referrer", $type: "direct" }, { not: { $source: "referrer", $type: "referral" } }]) {
-    assert.deepEqual(evaluatePlan(plan([target], definition), request, { v: 1, q: {} }), []);
-    assert.deepEqual(evaluatePlan(plan([target], definition), request, { v: 1, q: {}, r: "" }), [target]);
+    assert.deepEqual(appliedActions(plan([target], definition), request, { v: 1, q: {} }), []);
+    assert.deepEqual(appliedActions(plan([target], definition), request, { v: 1, q: {}, r: "" }), [target]);
   }
 });
 
@@ -768,7 +769,7 @@ test("first-referrer domain rules match the host and its subdomains but not look
     ["facebook.com", "", false],
   ];
   for (const [r, domain, expected] of cases) {
-    const result = evaluatePlan(plan([target], { $source: "referrer", $type: "domain", domain }), request, { v: 1, q: {}, r });
+    const result = appliedActions(plan([target], { $source: "referrer", $type: "domain", domain }), request, { v: 1, q: {}, r });
     assert.deepEqual(result, expected ? [target] : [], `${JSON.stringify(r)} against ${JSON.stringify(domain)}`);
   }
 });
@@ -779,8 +780,8 @@ test("negative touch-query rules distinguish absent observations from observed e
   for (const occurrence of ["first touch", "last touch"]) {
     for (const operator of ["does not equal", "does not contain", "is not set"]) {
       const queryPlan = plan([target], { $source: "query", query: "biz", occurrence, operator, value: "saas" });
-      assert.deepEqual(evaluatePlan(queryPlan, request, { v: 1, q: {} }), []);
-      assert.deepEqual(evaluatePlan(queryPlan, request, { v: 1, q: { biz: ["", ""] } }), [target]);
+      assert.deepEqual(appliedActions(queryPlan, request, { v: 1, q: {} }), []);
+      assert.deepEqual(appliedActions(queryPlan, request, { v: 1, q: { biz: ["", ""] } }), [target]);
     }
   }
 });

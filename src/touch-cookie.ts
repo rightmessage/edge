@@ -1,4 +1,4 @@
-import { HOLDOUT_UNIT_PATTERN, mintHoldoutUnit } from './holdout.js';
+import { HOLDOUT_UNIT_PATTERN, mintHoldoutUnit } from './assignment.js';
 
 export const TOUCH_COOKIE_NAME = '__Host-rm_touch';
 export const TOUCH_COOKIE_MAX_BYTES = 1024;

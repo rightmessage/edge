@@ -1,6 +1,8 @@
 import { boundedBytes, SOURCE_CAP } from './bytes.js';
 import { evaluatePlan } from './edge-plan.js';
-import { firstRequestHoldoutUnit, observeTouchCookie } from './touch-cookie.js';
+import { admitRequest } from './request.js';
+import type { Admission } from './request.js';
+import type { observeTouchCookie } from './touch-cookie.js';
 import { transformHTML } from './transform.js';
 import type { PlanLoad } from './plan-load.js';
 import type { HTMLRewriterConstructor } from './rewriter-types.js';
@@ -21,7 +23,6 @@ function privateHeaders(headers: Headers, cookie: string | null, transformed = f
 }
 
 export async function personalizeResponse(request: Request, origin: Response, planLoad: PlanLoad, dependencies: PersonalizeDependencies): Promise<Response> {
-  const url = new URL(request.url);
   const log = dependencies.log ?? ((message, details) => console.log(message, details));
   const isHTML = origin.headers.get('content-type')?.toLowerCase().includes('text/html');
   const bypass = (reason: string, cookie: string | null = null) => {
@@ -37,18 +38,19 @@ export async function personalizeResponse(request: Request, origin: Response, pl
   if (/charset=(?!utf-8|utf8)/i.test(origin.headers.get('content-type') ?? '')) return bypass('unsupported-charset');
   const outcome = await planLoad.promise;
   if (!outcome.loaded) return bypass(outcome.reason);
-  let observation;
+  const { plan, release } = outcome.loaded;
+  let admission: Admission;
+  try { admission = admitRequest(plan, request, dependencies.observeTouchCookie); }
+  catch { return bypass('attribution-failed'); }
+  // Without required consent nothing visitor-specific is written, so the response stays shareable.
+  if ('bypass' in admission) return bypass(admission.bypass);
+  const { touch, cookie } = admission;
   try {
-    const header = request.headers.get('cookie') ?? '';
-    observation = (dependencies.observeTouchCookie ?? observeTouchCookie)(header, outcome.loaded.plan.queryNames, url.href, request.headers.get('referer') ?? '', null, [], firstRequestHoldoutUnit(header));
-  } catch { return bypass('attribution-failed'); }
-  const cookie = observation.changed ? observation.cookie : null;
-  try {
-    const actions = evaluatePlan(outcome.loaded.plan, request, observation.state);
-    if (!actions.length) return bypass(cookie ? 'cookie-only' : 'no-actions', cookie);
+    const steps = evaluatePlan(plan, request, touch);
+    if (!steps.some(step => step.kind === 'apply')) return bypass(cookie ? 'cookie-only' : 'no-actions', cookie);
     if (Number(origin.headers.get('content-length')) > SOURCE_CAP) return bypass('oversized', cookie);
     const bytes = await boundedBytes(origin.clone(), SOURCE_CAP);
-    const output = await transformHTML(bytes, actions, outcome.loaded.release, dependencies.HTMLRewriter);
+    const output = await transformHTML(bytes, steps, release, dependencies.HTMLRewriter);
     if (!output) return bypass(cookie ? 'cookie-only' : 'no-actions', cookie);
     if (origin.body) void origin.body.cancel().catch(() => {});
     const headers = privateHeaders(origin.headers, cookie, true);

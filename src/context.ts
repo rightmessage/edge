@@ -8,10 +8,12 @@ export interface ContextCookie {
   cid?: unknown;
   identityScope?: { project?: unknown; connection?: unknown };
   es?: unknown;
-  /** Browser visitor id; a holdout unit only beside `ca`. */
+  /** Browser visitor id; an assignment unit only beside `ca` or `ab`. */
   vid?: unknown;
   /** Mirrored campaign arm ledger: `{v: 1, r: [[campaignId, exposed, holdback], ...]}`. */
   ca?: unknown;
+  /** Mirrored test version ledger: `{v: 1, r: [[testId:run, exposed, versionId], ...]}`. */
+  ab?: unknown;
   [key: string]: unknown;
 }
 export interface EdgeSignalSnapshot {
