@@ -125,12 +125,14 @@ export function cookieFlag(header: string, name: string): boolean {
 /**
  * `debug`: the tag's debugger (`?debug=true|yes`, last value wins) renders treatment for every
  * campaign and pins test versions in session storage the edge cannot see. `excluded`: the browser
- * opted out with `rm_exclude=1` renders treatment and version A everywhere.
+ * opted out with `rm_exclude=1` renders treatment and version A everywhere. `off`: before required
+ * consent the tag's assignment is off, which renders the same and reads no cookie.
  */
-export type VisitorMode = "debug" | "excluded" | "normal";
-export function visitorMode(url: URL, cookieHeader: string): VisitorMode {
+export type VisitorMode = "debug" | "excluded" | "off" | "normal";
+export function visitorMode(url: URL, cookieHeader: string, consentMissing = false): VisitorMode {
   const debug = url.searchParams.getAll("debug").at(-1);
   if (debug === "true" || debug === "yes") return "debug";
+  if (consentMissing) return "off";
   return cookieFlag(cookieHeader, "rm_exclude") ? "excluded" : "normal";
 }
 
@@ -161,7 +163,7 @@ export function campaignHoldback(campaign: Campaign, assignment: Assignment): bo
  * wins over the hash, as in the browser, but one the weights lack is never guessed.
  */
 export function drawVersion(campaignId: string, nodeId: string, test: Extract<PlanAbTest, { state: "running" }>, assignment: Assignment): VersionId | null {
-  if (assignment.mode === "excluded") return "A";
+  if (assignment.mode === "excluded" || assignment.mode === "off") return "A";
   if (!validWeights(test.weights)) return null;
   const recorded = assignment.versions?.get(`${test.id}:${test.run}`);
   if (recorded !== undefined) return Object.hasOwn(test.weights, recorded) ? recorded : null;

@@ -5,7 +5,8 @@ export const TOUCH_COOKIE_MAX_BYTES = 1024;
 export interface TouchState { v?: 1; q: Record<string, [string, string]>; r?: string; l?: string; u?: string }
 export interface TouchPage { query?: Record<string, unknown>; _queryValuesDecoded?: boolean; referrer?: string }
 export interface TouchObservation { state: TouchState; value: string; cookie: string; changed: boolean }
-const namesFor = (queryNames: readonly string[]): string[] => [...new Set(queryNames.filter((name) => typeof name === 'string' && name !== '_rm_ctx'))].sort();
+// `_rm_ctx` and `_rm` carry visitor context, never attribution.
+const namesFor = (queryNames: readonly string[]): string[] => [...new Set(queryNames.filter((name) => typeof name === 'string' && name !== '_rm_ctx' && name !== '_rm'))].sort();
 const emptyState = (): TouchState => ({ v: 1, q: {} });
 const cookieValue = (header: string): string | null => {
   const prefix = `${TOUCH_COOKIE_NAME}=`;

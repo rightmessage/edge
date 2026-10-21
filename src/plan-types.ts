@@ -97,6 +97,8 @@ export interface Dimension {
   isMultiWinning?: boolean;
   segments: Segment[];
   signals?: Signal[];
+  /** `true` when a question answers this dimension. `_rm` answers for a dimension with signals count only when asked. */
+  asked?: boolean;
   [key: string]: unknown;
 }
 export interface Variant {

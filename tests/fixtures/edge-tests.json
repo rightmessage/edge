@@ -982,6 +982,139 @@
       "setCookie": null,
       "decisions": [],
       "bodyUnchanged": true
+    },
+    {
+      "name": "S10",
+      "url": "https://example.com/?role=saas&_rm=eyJ2IjoxLCJkaW1zIjp7ImRpbV9yb2xlIjpbInNlZ19zYWFzIl19fQ~~",
+      "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "plan": {
+        "version": 2,
+        "consent": "required",
+        "dimensions": [
+          {
+            "id": "dim_role",
+            "isMultiWinning": false,
+            "asked": true,
+            "segments": [
+              {
+                "id": "seg_saas"
+              }
+            ],
+            "signals": [
+              {
+                "indicates": "seg_saas",
+                "definition": {
+                  "$source": "query",
+                  "$type": "custom",
+                  "query": "role",
+                  "occurrence": "current",
+                  "operator": "equals",
+                  "value": "saas"
+                },
+                "edge": {
+                  "supported": true,
+                  "reason": null
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "kind": "apply",
+          "actionId": "act_dep"
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_cta"
+        },
+        {
+          "kind": "apply",
+          "actionId": "act_sub",
+          "versions": ["A"]
+        }
+      ],
+      "receipts": [
+        {
+          "actionId": "act_dep",
+          "targetId": "e1"
+        },
+        {
+          "actionId": "act_cta",
+          "targetId": "e2"
+        },
+        {
+          "actionId": "act_sub",
+          "targetId": "e1",
+          "versions": ["A"]
+        }
+      ],
+      "edge": "applied",
+      "setCookie": null,
+      "decisions": [
+        {
+          "campaignId": "cpn_deploy0001",
+          "variantId": "original",
+          "layer": "original",
+          "actionIds": ["act_dep"]
+        },
+        {
+          "campaignId": "cpn_opCBD8W3",
+          "variantId": "var_saas",
+          "layer": "audience",
+          "versionId": "A",
+          "actionIds": ["act_cta", "act_sub"]
+        }
+      ],
+      "text": {
+        "h1": "Ship it",
+        "p.sub": "For SaaS teams",
+        "a.cta": "Start your SaaS trial"
+      }
+    },
+    {
+      "name": "S10b",
+      "url": "https://example.com/?role=saas&_rm=eyJ2IjoxLCJkaW1zIjp7ImRpbV9yb2xlIjpbInNlZ19zYWFzIl19fQ~~",
+      "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+      "plan": {
+        "version": 2,
+        "consent": "required",
+        "dimensions": [
+          {
+            "id": "dim_role",
+            "isMultiWinning": false,
+            "segments": [
+              {
+                "id": "seg_saas"
+              }
+            ],
+            "signals": [
+              {
+                "indicates": "seg_saas",
+                "definition": {
+                  "$source": "query",
+                  "$type": "custom",
+                  "query": "role",
+                  "occurrence": "current",
+                  "operator": "equals",
+                  "value": "saas"
+                },
+                "edge": {
+                  "supported": true,
+                  "reason": null
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [],
+      "receipts": [],
+      "edge": "bypass:consent",
+      "setCookie": null,
+      "decisions": [],
+      "bodyUnchanged": true
     }
   ],
   "envelopes": [

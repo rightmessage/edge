@@ -1,8 +1,9 @@
-import { decodeContextCookie, decodeEdgeSignals } from "./context.js";
+import { carriedDimensions, decodeContextCookie, decodeEdgeSignals } from "./context.js";
+import type { ContextCookie } from "./context.js";
 import { campaignHoldback, drawVersion, requestAssignment, visitorMode } from "./assignment.js";
 import { ORIGINAL_ID } from "./plan-types.js";
 import type { Action, Campaign, Decision, EdgePlan, EdgeRequest, EvaluationTime, PageCriterion, PlanAbTest, PlanEntry, Rule, RuleObject, Step, VersionId } from "./plan-types.js";
-import { consentMissing } from "./request.js";
+import { consentlessTouch, consentMissing } from "./request.js";
 import { heldSlots } from "./slots.js";
 import type { TouchState } from "./touch-cookie.js";
 
@@ -218,10 +219,8 @@ function matchesObservedTouchQuery(history: [string, string] | undefined, rule: 
   return value === undefined ? UNKNOWN : matchesQueryValue(value, rule);
 }
 
-function createEvaluator(plan: EdgePlan, request: EdgeRequest, touch: TouchState, now: EvaluationTime) {
-  const url = new URL(request.url);
+function createEvaluator(plan: EdgePlan, request: EdgeRequest, url: URL, context: ContextCookie, touch: TouchState, now: EvaluationTime) {
   const query = Object.fromEntries(url.searchParams);
-  const context = decodeContextCookie(request.headers.get("cookie") || "");
   const hard = context.dims && typeof context.dims === "object" ? context.dims : {};
   const identityScopeMatches = !context.identityScope || String(context.identityScope.project) === String(plan.teamPid);
   const hasIntegrationIdentity = identityScopeMatches && context.cid != null && String(context.cid) !== "";
@@ -377,7 +376,7 @@ function createEvaluator(plan: EdgePlan, request: EdgeRequest, touch: TouchState
     const path = normalize(criterion.path || "");
     return path.includes("*") ? new RegExp(`^${path.replace("*", ".*")}$`).test(normalize(url.pathname)) : path === normalize(url.pathname);
   });
-  return { url, context, rulesMatch, matchesPage };
+  return { rulesMatch, matchesPage };
 }
 
 interface WalkNode { campaignId: string; variantId: string; layer: Decision["layer"]; versionId?: VersionId; applies: { rank: number; action: Action }[] }
@@ -389,13 +388,27 @@ const executable = (entry: PlanEntry): entry is Action => Array.isArray(entry.ed
 // Browser candidate order (`collectCandidates`): every active campaign's Original layer, then every
 // active campaign's audiences. Every writer the edge does not perform becomes a claim or a cut at
 // its own rank, so the transform can keep lower writes out of slots the browser still has to settle.
-function walk(plan: EdgePlan, request: EdgeRequest, touch: TouchState, now: EvaluationTime): { steps: Step[]; nodes: WalkNode[] } {
+function walk(plan: EdgePlan, request: EdgeRequest, observed: TouchState, now: EvaluationTime): { steps: Step[]; nodes: WalkNode[] } {
   const steps: Step[] = [];
   const nodes: WalkNode[] = [];
   const header = request.headers.get("cookie") || "";
-  if (consentMissing(plan, header)) return { steps, nodes };
-  const { url, context, rulesMatch, matchesPage } = createEvaluator(plan, request, touch, now);
-  const assignment = requestAssignment(visitorMode(url, header), context, touch.u);
+  const url = new URL(request.url);
+  const missing = consentMissing(plan, header);
+  const carried = carriedDimensions(plan.dimensions, url);
+  let context: ContextCookie;
+  let touch = observed;
+  if (missing) {
+    if (!carried) return { steps, nodes };
+    // Before consent the browser reads no cookie or storage: only the `_rm` answers and this page view count.
+    context = { v: 1, dims: carried };
+    touch = consentlessTouch(plan, request);
+  } else {
+    context = decodeContextCookie(header);
+    // Each accepted `_rm` dimension replaces that dimension's `_rm_ctx` answers.
+    if (carried) context.dims = { ...(context.dims && typeof context.dims === "object" ? context.dims : {}), ...carried };
+  }
+  const { rulesMatch, matchesPage } = createEvaluator(plan, request, url, context, touch, now);
+  const assignment = requestAssignment(visitorMode(url, header, missing), context, touch.u);
   const hold = (entry: PlanEntry) => {
     const slots = heldSlots(entry.edge);
     if (typeof entry.selector !== "string" || !entry.selector || slots.includes("page")) steps.push({ kind: "cut" });
@@ -449,7 +462,10 @@ function walk(plan: EdgePlan, request: EdgeRequest, touch: TouchState, now: Eval
   return { steps, nodes };
 }
 
-/** Browser-ordered steps: all Original layers, then all audiences. Empty when consent is required and missing. */
+/**
+ * Browser-ordered steps: all Original layers, then all audiences. When consent is required and missing they are
+ * empty unless `_rm` carries an accepted dimension; then `touch` and every cookie are ignored and assignment is off.
+ */
 export function evaluatePlan(plan: EdgePlan, request: EdgeRequest, touch: TouchState, now: EvaluationTime = new Date()): Step[] {
   return walk(plan, request, touch, now).steps;
 }

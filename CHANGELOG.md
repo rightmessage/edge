@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- A RightMessage link's `_rm` query parameter is read. It carries the visitor's answered segments as `_rm_ctx` does, and only `dims` is used. A carried dimension counts as the tag counts it from a URL: one with signals only when a question answers it, and only segments of that dimension. Each accepted dimension replaces that dimension's `_rm_ctx` answers.
+- Projects that wait for cookie consent personalize `_rm` landings before consent. When `_rm` carries an accepted dimension, the walk mirrors the tag's pre-consent assignment `off`: every test renders version A, so an Original test leaves the page unchanged, and campaigns with a holdback render their treatment. No cookie is read, the request is evaluated as a first page view, nothing is minted or written, and a personalized response is private/no-store. Without an accepted dimension the request still bypasses as `consent`.
+- Plans mark each dimension a question answers with `asked: true`. The plan version is unchanged; older evaluators ignore the field and `_rm`.
+- `_rm` is never a touch-cookie query name, like `_rm_ctx`.
+- New exports: `decodeUrlContext`, `carriedDimensions`, `URL_CONTEXT_PARAM`. `admitRequest` admits a pre-consent `_rm` request with a cookieless touch and `cookie: null`.
+- `tests/fixtures/edge-tests.json` gains cases S10 and S10b for pre-consent `_rm` landings.
+
 ## 0.3.0
 
 Breaking within 0.x: `evaluatePlan` returns and `transformHTML` takes `Step[]` instead of `Action[]`, `holdoutUnit` is now `assignmentUnit`, and `campaignHoldback` and `debugForcesTreatment` are internal. There are no compatibility aliases.

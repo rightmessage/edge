@@ -46,6 +46,18 @@ The browser omits `es` whenever including it would push `_rm_ctx` beyond 3,500 e
 
 `assignmentUnit(touchUnit, context)` returns the touch cookie's valid `u`, else `vid` when `ca` or `ab` decodes as a ledger, else null. Only a tag that mirrors ledgers writes either one, and it hashes the same visitor id it writes as `vid`. A context without a ledger may predate the mirror, so its `vid` is not used.
 
+## `_rm`: link context
+
+`_rm` is a query parameter, not a cookie, but it carries the same payload. A RightMessage link (a flow redirect or an offer link) adds it when the visitor leaves for another site. `decodeUrlContext(url)` decodes the first `_rm` value, which `URLSearchParams` has already URL-decoded, exactly as `_rm_ctx`: base64 substitutions reversed, strict UTF-8, JSON, `v: 1`. Anything else decodes as `{}`.
+
+The edge reads only `dims`. Links sent before consent carry only `v`, `dims` and `vars` (data variables, which only the browser uses); `vid`, `cid`, `ca`, `ab` and the rest stay with the browser. `carriedDimensions(plan.dimensions, url)` accepts each carried dimension as the tag accepts one from a URL:
+
+- A dimension the plan lacks is ignored. The plan carries every dimension a published rule references.
+- A dimension with signals is accepted only when a question answers it (`asked: true`); otherwise its signals are evaluated fresh.
+- Segment IDs outside the dimension are dropped. A non-array value leaves the dimension accepted with no segments.
+
+With consent, each accepted dimension replaces that dimension's `_rm_ctx.dims` answers; every other `_rm_ctx` field and dimension is unchanged. Without required consent (below), a request with at least one accepted dimension is personalized from those answers alone.
+
 ## `__Host-rm_touch`: observed attribution
 
 `decodeTouchCookie(header, queryNames)` and `observeTouchCookie(header, queryNames, location, referrer, firstPage?, pages?)` share this URI-encoded JSON contract:
@@ -58,7 +70,7 @@ The browser omits `es` whenever including it would push `_rm_ctx` beyond 3,500 e
 
 `l` is the first observed pathname, used to decide `pageviews` / `landingpage` rules. It is set only when the request has no `__Host-rm_touch` cookie: that pathname is the landing page. A cookie that already exists but has no `l` is not backfilled from the current URL. The value must be a pathname of at most 256 characters, starting with `/`, with no `?`, `#`, backslash, or control character; anything else is dropped and the landing page stays unknown. Browser tags before the field-preservation rule below rewrote this cookie from the keys they knew (`v`, `q`, `r`, `u`) and dropped `l`. After such a rewrite, landing-page leaves are unknown again until a cookieless request records a new `l`.
 
-Only allowlisted query names are retained. Names are deduplicated and sorted; `_rm_ctx` is always excluded. Each retained value is a pair of strings. Duplicate current query parameters use their last decoded value. An observed empty string is a value, not absence. A first/last-touch name absent from the cookie has no observed pageview and matches no operator, including negative operators.
+Only allowlisted query names are retained. Names are deduplicated and sorted; `_rm_ctx` and `_rm` are always excluded. Each retained value is a pair of strings. Duplicate current query parameters use their last decoded value. An observed empty string is a value, not absence. A first/last-touch name absent from the cookie has no observed pageview and matches no operator, including negative operators.
 
 Optional retained browser pageviews seed missing names from their first and last observed values before the current URL is observed. Legacy query values normalize `+` and decode percent escapes once; pageviews marked `_queryValuesDecoded` are already decoded. Existing first-touch values are not replaced.
 
@@ -77,4 +89,5 @@ The 1 KiB bound and pre-cookie history can cause temporary edge/browser disagree
 The browser tag writes both on the registrable domain; the edge only reads them. A flag is set when the `Cookie` header has at least one `name=` entry and every such entry is exactly `1`. An empty value, any other value, or conflicting duplicates read as absent.
 
 - **`rm_consent=1`** records the visitor's consent grant. A plan with `consent: "required"` (always `version: 2`) personalizes nothing without it: `admitRequest` returns `{ bypass: "consent" }`, no unit is minted, `observeTouchCookie` is not called, no Set-Cookie or private headers are added, and the response carries `x-rm-edge: bypass:consent`. `evaluatePlan` and `decide` also return nothing, for a caller that skips `admitRequest`. 0.1.x and 0.2.x reject a version 2 plan as `invalid-plan`, which also writes nothing.
+  The one exception is a request whose [`_rm`](#_rm-link-context) carries an accepted dimension. The browser applies those answers before consent too, so the edge personalizes them with the tag's assignment off: every test renders version `A` (an Original test renders Control), every campaign renders its treatment arm, and deployed winners render. No cookie is read: `_rm_ctx`, `__Host-rm_touch` and `rm_exclude` are ignored, and the request is evaluated as a first page view from its URL and referrer. `admitRequest` returns that touch with `cookie: null`, no unit is minted, nothing is written, and a personalized response is private/no-store.
 - **`rm_exclude=1`** marks a browser the site owner excluded from tests and stats. Consent is checked first, and a debug request takes precedence. Every campaign renders its treatment arm, every test renders version `A`, and deployed winners render. The touch cookie is observed for rule facts only: no unit is minted, and no cookie is written even when the observation changed.

@@ -1,3 +1,5 @@
+import type { Dimension } from "./plan-types.js";
+
 export const EDGE_SIGNAL_VERSION = 1;
 export const EDGE_SIGNAL_KEY_LENGTH = 8;
 export const EDGE_SIGNAL_MAX_AGE_DAYS = 30;
@@ -34,15 +36,46 @@ export interface EdgeSignalIdentity {
   today?: number;
 }
 
+/** The query parameter a RightMessage link carries visitor context in, encoded like `_rm_ctx`. */
+export const URL_CONTEXT_PARAM = "_rm";
+
+function decodeContextValue(encoded: string): ContextCookie {
+  const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/").replace(/~/g, "=");
+  const payload: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(atob(base64), c => c.charCodeAt(0))));
+  return payload && typeof payload === "object" && "v" in payload && payload.v === 1 ? payload as ContextCookie : {};
+}
+
 /** Decode the browser's UTF-8, URL-safe base64 `_rm_ctx` cookie. */
 export function decodeContextCookie(cookie: string): ContextCookie {
   try {
     const encoded = cookie.split(";").map(x => x.trim()).find(x => x.startsWith("_rm_ctx="))?.slice(8);
-    if (!encoded) return {};
-    const base64 = decodeURIComponent(encoded).replace(/-/g, "+").replace(/_/g, "/").replace(/~/g, "=");
-    const payload: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(atob(base64), c => c.charCodeAt(0))));
-    return payload && typeof payload === "object" && "v" in payload && payload.v === 1 ? payload as ContextCookie : {};
+    return encoded ? decodeContextValue(decodeURIComponent(encoded)) : {};
   } catch { return {}; }
+}
+
+/** Decode the first `_rm` query value, which `URLSearchParams` has already URL-decoded. */
+export function decodeUrlContext(url: URL): ContextCookie {
+  try {
+    const encoded = url.searchParams.get(URL_CONTEXT_PARAM);
+    return encoded ? decodeContextValue(encoded) : {};
+  } catch { return {}; }
+}
+
+/**
+ * The answered dimensions `_rm` carries, accepted as the tag accepts them from a URL: a dimension the plan
+ * lacks, or one with signals and no question (`asked`), is ignored, and a segment outside its dimension is
+ * dropped. Each accepted dimension replaces that dimension's answers. `null` when none is accepted.
+ */
+export function carriedDimensions(dimensions: readonly Dimension[], url: URL): Record<string, string[]> | null {
+  const dims = decodeUrlContext(url).dims;
+  if (!dims || typeof dims !== "object") return null;
+  const carried: Record<string, string[]> = {};
+  for (const [id, segmentIds] of Object.entries(dims)) {
+    const dimension = dimensions.find(d => d.id === id);
+    if (!dimension || !Array.isArray(dimension.segments) || (Array.isArray(dimension.signals) && dimension.signals.length > 0 && dimension.asked !== true)) continue;
+    carried[id] = Array.isArray(segmentIds) ? segmentIds.filter((segmentId): segmentId is string => typeof segmentId === "string" && dimension.segments.some(segment => segment.id === segmentId)) : [];
+  }
+  return Object.keys(carried).length ? carried : null;
 }
 
 /** FNV-1a over UTF-16 code units; identity consistency, not authentication. */

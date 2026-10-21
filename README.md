@@ -79,7 +79,7 @@ if (outcome.loaded) {
   // Consent, rm_exclude, unit minting and touch observation in one call.
   const admission = admitRequest(outcome.loaded.plan, request);
   if ('bypass' in admission) {
-    // 'consent': the project waits for cookie consent. Write no cookie and render nothing.
+    // 'consent': the project waits for cookie consent and the URL carries no usable `_rm`. Write no cookie and render nothing.
   } else {
     const decisions = decide(outcome.loaded.plan, request, admission.touch);
     // Decision[]: { campaignId, variantId, layer: 'original' | 'audience', versionId?, actions }
@@ -93,16 +93,18 @@ if (outcome.loaded) {
 
 Campaigns with a holdout share are decided per visitor arm, and running A/B tests per version. The edge assigns the arm and version the browser tag assigns from the same cookies: a recorded arm in `_rm_ctx.ca` or version in `_rm_ctx.ab`, else a shared hash of the visitor's unit. The edge personalizes only the treatment arm. Deployed winners and each campaign's Original layer render first, for every arm, then audiences, as in the browser. When the edge cannot know a rule, arm or version, it leaves that writer to the browser and stays out of the elements it may touch. A debugger request (`?debug=true` or `?debug=yes`) takes the treatment arm and leaves every tested layer to the browser. See [the walk](docs/PLAN_SCHEMA.md#the-walk).
 
-A project that waits for cookie consent publishes a version 2 plan with `consent: "required"`. Until the tag sets `rm_consent=1`, the edge writes no cookie and personalizes nothing. A browser opted out with `rm_exclude=1` sees the treatment arm and version A everywhere, and the edge writes no cookie for it. See [cookies](docs/COOKIES.md).
+A project that waits for cookie consent publishes a version 2 plan with `consent: "required"`. Until the tag sets `rm_consent=1`, the edge writes no cookie and personalizes nothing, unless the URL carries a RightMessage link's `_rm` answers (below). A browser opted out with `rm_exclude=1` sees the treatment arm and version A everywhere, and the edge writes no cookie for it. See [cookies](docs/COOKIES.md).
+
+A RightMessage link (a flow redirect or offer link, for example) can carry the visitor's answered segments in the `_rm` query parameter, encoded like `_rm_ctx`. The edge accepts a carried dimension as the tag does: a dimension with signals counts only when a question answers it (plan field `asked`), and segments outside the dimension are dropped. Each accepted dimension replaces that dimension's `_rm_ctx` answers. Before consent, accepted `_rm` answers are personalized with the tag's assignment off: every test shows version A, holdback campaigns render their treatment, no cookie is read or written, and a personalized response is private/no-store. Without an accepted dimension the request still bypasses as `consent`. See [`_rm`](docs/COOKIES.md#_rm-link-context).
 
 ## API
 
 - `startPlanLoad(request, config, dependencies?, ctx?)` → `PlanLoad` with `promise` and `abort()`. Outcomes are `{ loaded: { plan, release } }` or `{ reason }`. Config: `teamPid`, optional `tagOrigin`, `enabled`, `allowRsc`. Dependencies: `fetch`, `planCache`, `planTimeoutMs`.
 - `personalizeResponse(request, origin, planLoad, dependencies)` → `Promise<Response>`. Supply `HTMLRewriter`; optional `observeTouchCookie` injection and a reason-only `log` callback.
-- `admitRequest(plan, request, observeTouchCookie?)` → `{ bypass: 'consent' }` or `{ touch, cookie }`. It owns the consent gate, `rm_exclude`, unit minting and touch observation for every adapter.
+- `admitRequest(plan, request, observeTouchCookie?)` → `{ bypass: 'consent' }` or `{ touch, cookie }`. It owns the consent gate, `rm_exclude`, unit minting and touch observation for every adapter. Before consent, a request carrying accepted `_rm` dimensions is admitted with a cookieless first-page-view `touch` and `cookie: null`.
 - `transformHTML(bytes, steps, release, HTMLRewriter)` performs the buffered transform and returns `null` when no operation succeeds. Prefer `personalizeResponse` for fail-open orchestration.
 - `createPlanCache({ now? })`, `PLAN_TIMEOUT_MS`, `RELEASE_FRESH_MS`, `NEGATIVE_TTL_MS`, `SUPPORTED_PLAN_VERSIONS`, `requestBypassReason`.
-- `evaluatePlan` (ordered `apply`, `claim` and `cut` steps), `decide`, `abTestVersionPoint`, `assignAbTestVersion`, `decodeTestVersions`, `assignmentUnit`, touch/context/snapshot codec functions and their named TypeScript models.
+- `evaluatePlan` (ordered `apply`, `claim` and `cut` steps), `decide`, `abTestVersionPoint`, `assignAbTestVersion`, `decodeTestVersions`, `assignmentUnit`, `decodeUrlContext`, `carriedDimensions`, `URL_CONTEXT_PARAM`, touch/context/snapshot codec functions and their named TypeScript models.
 
 ## Failure and caching policy
 

@@ -56,9 +56,9 @@ The default per-request deadline is 300 ms. The in-memory cache retains up to tw
 | Field | Shape | Meaning |
 | --- | --- | --- |
 | `version` | `1` or `2` | Plan schema version. The compiler emits `2` exactly when the project waits for cookie consent. 0.1.x and 0.2.x evaluators support only `1`, so they bypass a consent project's plan and write no cookie. |
-| `consent` | optional `"required"` | Present only with `version: 2`. Until the request carries `rm_consent=1`, the edge writes no cookie and personalizes nothing (see [COOKIES.md](COOKIES.md#rm_consent-and-rm_exclude)). A version 1 plan that carries it is gated too. |
+| `consent` | optional `"required"` | Present only with `version: 2`. Until the request carries `rm_consent=1`, the edge writes no cookie and personalizes nothing unless the URL carries accepted `_rm` answers (see [COOKIES.md](COOKIES.md#rm_consent-and-rm_exclude)). A version 1 plan that carries it is gated too. |
 | `teamPid` | string | Public project identifier; must match the release/configuration. |
-| `queryNames` | string array | Compiler-discovered query names needed by published rules. Sorted by the compiler; `_rm_ctx` is excluded. This is the touch-history allowlist, not visitor query values. |
+| `queryNames` | string array | Compiler-discovered query names needed by published rules. Sorted by the compiler; `_rm_ctx` and `_rm` are excluded. This is the touch-history allowlist, not visitor query values. |
 | `dimensions` | dimension array | Referenced dimensions, including transitive dependencies through signals. Not necessarily every dimension in the project. |
 | `campaigns` | campaign array | Ordered live campaigns with their Original layers and every variant that has an entry: an executable action or a browser-owned stub. There is no root `actions` array. |
 | `connectionScope` | optional string | Opaque active integration-connection scope used to reject recorded outcomes from another connection. It is not a contact ID, credential, or revision. |
@@ -67,7 +67,7 @@ Object key order is not semantic, except that attribute/style modification order
 
 ## Dimensions and signals
 
-A dimension contains `id`, `isMultiWinning`, `segments`, and `signals`. Each published segment is an object with an `id`; segment display names are not needed by this execution plan.
+A dimension contains `id`, `isMultiWinning`, `segments`, and `signals`, plus `asked: true` when a question answers it (the field is absent otherwise). Each published segment is an object with an `id`; segment display names are not needed by this execution plan. `asked` was added in 0.4 without a version change: older evaluators ignore it, and so ignore `_rm` altogether.
 
 A signal contains:
 
@@ -79,6 +79,8 @@ A signal contains:
 **Do not reject a whole signal just because its summary says `supported: false`.** The compiler annotates its leaves separately. A request-decidable branch may settle a mixed tree even while another branch remains unknown.
 
 Dimension evaluation uses hard answers from `_rm_ctx.dims[dimensionId]` before signal inference. A missing dimension answer is unanswered, not an unknown answer. Signals indicating the same segment combine with OR.
+
+A RightMessage link's `_rm` query parameter (see [COOKIES.md](COOKIES.md#_rm-link-context)) carries answers too. A carried dimension is accepted when the plan has it and it has no signals or is `asked`; its segments outside the dimension are dropped. An accepted dimension replaces that dimension's `_rm_ctx` answers, even with no valid segment left. Before consent, the accepted `_rm` dimensions are the only answers.
 
 - For a single-winning dimension (`isMultiWinning: false`), segment array order is priority order. Answers are considered before signals. An earlier unknown signal can block a later true signal from becoming a definite winner; it must not be treated as a non-match.
 - For a multi-winning dimension, segments can independently be true, false, or unknown.
@@ -163,7 +165,7 @@ These additions all live inside schema version 1. 0.1.x and 0.2.x never read the
 - `{ kind: "claim", selector, slots }`: a higher writer the edge does not perform. The transform keeps lower writes out of the elements and slot families it may touch.
 - `{ kind: "cut" }`: a higher writer the edge cannot locate. Every lower apply is dropped.
 
-When the plan requires consent and the request lacks `rm_consent=1`, the walk is empty. The visitor mode is `debug` (last `debug` query value `true` or `yes`), else `excluded` (`rm_exclude=1`), else `normal`.
+When the plan requires consent and the request lacks `rm_consent=1`, the walk is empty unless `_rm` carries an accepted dimension. Then the walk ignores the `touch` argument and every cookie, evaluates the request as a first page view (current query and referrer, landing path, no unit), and runs in mode `off`, the tag's pre-consent assignment: treatment arm and version `A` everywhere, so an Original test shows Control and the page stays unchanged. Otherwise the visitor mode is `debug` (last `debug` query value `true` or `yes`, which also wins over `off`), else `excluded` (`rm_exclude=1`), else `normal`.
 
 1. **Original layers**, for every active campaign in order:
    - no `abTest`: apply every entry (a deployment, for held-back and excluded visitors too);
@@ -182,7 +184,7 @@ Within an applied node, an executable entry becomes an apply and a stub becomes 
 
 A running test's version is drawn in this order:
 
-1. `rm_exclude=1`: `A`.
+1. `rm_exclude=1`, or mode `off`: `A`.
 2. Invalid weights: unknown.
 3. A valid `_rm_ctx.ab` record for `testId:run`: that version, or unknown when the weights lack it.
 4. No unit: unknown.
@@ -194,7 +196,7 @@ A running test's version is drawn in this order:
 
 A campaign whose `testing.is_enabled` is truthy publishes its variant actions as `{"supported": false, "reason": "campaign-experiment", "operations": [...], "deferredOperations": [...]}`, or behind `campaign-test` when an audience test runs. Evaluators that cannot assign arms (0.1.x) skip such actions and never personalize the holdout arm. To fit the 1 MiB limit a publisher demotes campaigns to stubs rather than omitting them, so the edge still sees every writer.
 
-The arm is chosen in this order. A debug request (last `debug` query value `true` or `yes`) and an excluded browser (`rm_exclude=1`) skip it and take the treatment arm, matching the browser, which neither reads nor records arms for them.
+The arm is chosen in this order. A debug request (last `debug` query value `true` or `yes`), an excluded browser (`rm_exclude=1`) and mode `off` skip it and take the treatment arm, matching the browser, which neither reads nor records arms for them.
 
 1. A record for the campaign in `_rm_ctx.ca`. It wins for every campaign, including a non-experiment campaign that still holds a sticky holdout.
 2. For a campaign without testing enabled, the treatment arm.
@@ -325,6 +327,6 @@ The browser loader must use the pinned URL from the same release as the plan, no
 
 `requestBypassReason` excludes disabled execution (`not-production`), non-GET requests (`request-method`), RSC requests unless `allowRsc` is enabled (`rsc`), URLs containing `preview`, `rmpreview`, `__rm_test`, or `rmeditor` (`preview`), and requests carrying the tag's draft-preview session cookie `rm_preview=1` (`preview`). The query keys are presence checks, not truthy-value checks.
 
-Non-HTML responses pass through. HTML with a non-200 origin status or unsupported declared charset bypasses. Load failures, timeouts, unsupported versions, and invalid plans preserve the origin body; without a validated plan there is no guessed query allowlist or touch-cookie update. A consent project's request without `rm_consent=1` bypasses as `consent`, with no Set-Cookie and no private headers. No eligible/successful actions yield `no-actions`, or `cookie-only` when attribution alone changed. Attribution, transform, selector, serialization, and buffer failures fail open rather than deliver partial personalization.
+Non-HTML responses pass through. HTML with a non-200 origin status or unsupported declared charset bypasses. Load failures, timeouts, unsupported versions, and invalid plans preserve the origin body; without a validated plan there is no guessed query allowlist or touch-cookie update. A consent project's request without `rm_consent=1` bypasses as `consent`, with no Set-Cookie and no private headers, unless `_rm` carries an accepted dimension; that request never sets a cookie, and is private/no-store only when personalized. No eligible/successful actions yield `no-actions`, or `cookie-only` when attribution alone changed. Attribution, transform, selector, serialization, and buffer failures fail open rather than deliver partial personalization.
 
 HTML responses expose `x-rm-edge: applied` or `x-rm-edge: bypass:<reason>`. A successful touch observation can survive a later transform failure. Cookie-only or personalized responses become private/no-store; committed body changes remove stale body validators, length, and encoding headers. Request bypasses preserve the body and do not observe touch history.

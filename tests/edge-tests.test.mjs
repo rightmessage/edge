@@ -47,7 +47,7 @@ const personalizeWASM = async entry => {
 };
 
 test("the fixture carries every walk case of the design", () => {
-  assert.deepEqual(fixture.cases.map(entry => entry.name), ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S9b", "S9c"]);
+  assert.deepEqual(fixture.cases.map(entry => entry.name), ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S9b", "S9c", "S10", "S10b"]);
 });
 
 for (const entry of fixture.cases) {
