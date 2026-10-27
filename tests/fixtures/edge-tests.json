@@ -1509,5 +1509,472 @@
       }
     ],
     "floor": "{\"campaigns\":[],\"dimensions\":[],\"queryNames\":[\"role\"],\"teamPid\":\"demo-team\",\"version\":1}"
+  },
+  "hosted": {
+    "config": {
+      "dimensions": [],
+      "campaigns": [
+        {
+          "id": "cpn_hostedSpring",
+          "is_active": true,
+          "testing": {
+            "is_enabled": true,
+            "withhold": 20
+          },
+          "variants": [
+            {
+              "id": "var_spring",
+              "rules": {
+                "all": [
+                  {
+                    "$source": "utm",
+                    "$type": "utm_campaign",
+                    "operator": "equals",
+                    "value": "spring",
+                    "occurrence": "last touch"
+                  }
+                ]
+              },
+              "actions": [
+                {
+                  "id": "act_spring_title",
+                  "$type": "MODIFY_ELEMENT",
+                  "page": [
+                    {
+                      "domain": "acme.rightmessage.page",
+                      "path": "/"
+                    }
+                  ],
+                  "selector": "[data-rm-id=\"hero-title\"]",
+                  "modifications": {
+                    "text": "Grow your list this spring"
+                  }
+                },
+                {
+                  "id": "act_spring_copy",
+                  "$type": "MODIFY_ELEMENT",
+                  "page": [
+                    {
+                      "domain": "acme.rightmessage.page",
+                      "path": "/"
+                    }
+                  ],
+                  "selector": "[data-rm-id=\"hero-copy\"]",
+                  "modifications": {
+                    "text": "The spring playbook for creators."
+                  }
+                }
+              ],
+              "test": {
+                "id": "abt_HostedSpring01",
+                "state": "running",
+                "run": "abr_HostedSpring0000001",
+                "versions": [
+                  {
+                    "id": "A",
+                    "name": "Control",
+                    "weight": 50
+                  },
+                  {
+                    "id": "B",
+                    "name": "Variant A",
+                    "weight": 50,
+                    "overrides": [
+                      {
+                        "actionId": "act_spring_title",
+                        "fields": [
+                          {
+                            "path": ["text"],
+                            "op": "set",
+                            "value": "Spring is for growing your list"
+                          }
+                        ]
+                      }
+                    ],
+                    "actions": [
+                      {
+                        "id": "act_spring_cta",
+                        "$type": "MODIFY_ELEMENT",
+                        "page": [
+                          {
+                            "domain": "acme.rightmessage.page",
+                            "path": "/"
+                          }
+                        ],
+                        "selector": "[data-rm-id=\"hero-cta\"]",
+                        "modifications": {
+                          "text": "Get the spring guide"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "plan": {
+      "campaigns": [
+        {
+          "id": "cpn_hostedSpring",
+          "is_active": true,
+          "testing": {
+            "is_enabled": true,
+            "withhold": 20
+          },
+          "variants": [
+            {
+              "abTest": {
+                "id": "abt_HostedSpring01",
+                "run": "abr_HostedSpring0000001",
+                "state": "running",
+                "weights": {
+                  "A": 50,
+                  "B": 50
+                }
+              },
+              "actions": [
+                {
+                  "$type": "MODIFY_ELEMENT",
+                  "actionId": "act_spring_title",
+                  "campaignId": "cpn_hostedSpring",
+                  "edge": {
+                    "deferredOperations": [],
+                    "operations": ["text"],
+                    "reason": "campaign-test",
+                    "supported": false
+                  },
+                  "id": "act_spring_title",
+                  "modifications": {
+                    "text": "Grow your list this spring"
+                  },
+                  "page": [
+                    {
+                      "domain": "acme.rightmessage.page",
+                      "path": "/"
+                    }
+                  ],
+                  "selector": "[data-rm-id=\"hero-title\"]",
+                  "variantId": "var_spring",
+                  "versions": ["A"]
+                },
+                {
+                  "$type": "MODIFY_ELEMENT",
+                  "actionId": "act_spring_title",
+                  "campaignId": "cpn_hostedSpring",
+                  "edge": {
+                    "deferredOperations": [],
+                    "operations": ["text"],
+                    "reason": "campaign-test",
+                    "supported": false
+                  },
+                  "id": "act_spring_title",
+                  "modifications": {
+                    "text": "Spring is for growing your list"
+                  },
+                  "page": [
+                    {
+                      "domain": "acme.rightmessage.page",
+                      "path": "/"
+                    }
+                  ],
+                  "selector": "[data-rm-id=\"hero-title\"]",
+                  "variantId": "var_spring",
+                  "versions": ["B"]
+                },
+                {
+                  "$type": "MODIFY_ELEMENT",
+                  "actionId": "act_spring_copy",
+                  "campaignId": "cpn_hostedSpring",
+                  "edge": {
+                    "deferredOperations": [],
+                    "operations": ["text"],
+                    "reason": "campaign-test",
+                    "supported": false
+                  },
+                  "id": "act_spring_copy",
+                  "modifications": {
+                    "text": "The spring playbook for creators."
+                  },
+                  "page": [
+                    {
+                      "domain": "acme.rightmessage.page",
+                      "path": "/"
+                    }
+                  ],
+                  "selector": "[data-rm-id=\"hero-copy\"]",
+                  "variantId": "var_spring"
+                },
+                {
+                  "$type": "MODIFY_ELEMENT",
+                  "actionId": "act_spring_cta",
+                  "campaignId": "cpn_hostedSpring",
+                  "edge": {
+                    "deferredOperations": [],
+                    "operations": ["text"],
+                    "reason": "campaign-test",
+                    "supported": false
+                  },
+                  "id": "act_spring_cta",
+                  "modifications": {
+                    "text": "Get the spring guide"
+                  },
+                  "page": [
+                    {
+                      "domain": "acme.rightmessage.page",
+                      "path": "/"
+                    }
+                  ],
+                  "selector": "[data-rm-id=\"hero-cta\"]",
+                  "variantId": "var_spring",
+                  "versions": ["B"]
+                }
+              ],
+              "id": "var_spring",
+              "rules": {
+                "all": [
+                  {
+                    "$source": "utm",
+                    "$type": "utm_campaign",
+                    "occurrence": "last touch",
+                    "operator": "equals",
+                    "value": "spring"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "dimensions": [],
+      "queryNames": ["utm_campaign"],
+      "teamPid": "4242",
+      "version": 1
+    },
+    "html": "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Grow your list</title>\n<link rel=\"canonical\" href=\"https://acme.rightmessage.page/\">\n<meta property=\"og:title\" content=\"Grow your list\">\n<meta property=\"og:url\" content=\"https://acme.rightmessage.page/\">\n<link rel=\"preconnect\" href=\"https://t.rightmessage.com\">\n<link rel=\"stylesheet\" href=\"/_rm/s/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.css\">\n<style>[data-rm-placeholder]{display:none!important}\n[data-rm-id=\"hero\"]{padding:4rem 1.5rem}</style>\n<script>(function(d){window.RM=window.RM||[];var s=d.createElement('script'),m=d.querySelector('meta[name=\"rm-edge-loader\"]');s.async=true;s.src=m?m.content:\"https://t.rightmessage.com/4242.js\";d.head.appendChild(s)})(document)</script>\n</head>\n<body>\n<section data-rm-id=\"hero\" class=\"hero\"><h1 data-rm-id=\"hero-title\">Grow your list</h1><p data-rm-id=\"hero-copy\">A weekly guide for creators.</p><a data-rm-id=\"hero-cta\" class=\"button\" href=\"#signup\">Get the guide</a></section><div data-rm-id=\"signup\" class=\"rm-area-signup\" data-rm-slot=\"w_123\" data-rm-min-height=\"320\" style=\"min-height:320px\"></div>\n</body>\n</html>\n",
+    "cases": [
+      {
+        "name": "H1",
+        "url": "https://acme.rightmessage.page/?utm_campaign=spring",
+        "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22CCCCCCCCCCCCCCCCCCCCCC%22%7D",
+        "edge": "applied",
+        "setCookie": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22utm_campaign%22%3A%5B%22spring%22%2C%22spring%22%5D%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22CCCCCCCCCCCCCCCCCCCCCC%22%7D",
+        "arms": {
+          "cpn_hostedSpring": "treatment"
+        },
+        "steps": [
+          {
+            "kind": "apply",
+            "actionId": "act_spring_title",
+            "versions": ["A"]
+          },
+          {
+            "kind": "apply",
+            "actionId": "act_spring_copy"
+          }
+        ],
+        "decisions": [
+          {
+            "campaignId": "cpn_hostedSpring",
+            "variantId": "var_spring",
+            "layer": "audience",
+            "versionId": "A",
+            "actionIds": ["act_spring_title", "act_spring_copy"]
+          }
+        ],
+        "receipts": [
+          {
+            "actionId": "act_spring_title",
+            "targetId": "e1",
+            "versions": ["A"]
+          },
+          {
+            "actionId": "act_spring_copy",
+            "targetId": "e2"
+          }
+        ],
+        "text": {
+          "[data-rm-id=\"hero-title\"]": "Grow your list this spring",
+          "[data-rm-id=\"hero-copy\"]": "The spring playbook for creators.",
+          "[data-rm-id=\"hero-cta\"]": "Get the guide"
+        }
+      },
+      {
+        "name": "H2",
+        "url": "https://acme.rightmessage.page/?utm_campaign=spring",
+        "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+        "edge": "applied",
+        "setCookie": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22utm_campaign%22%3A%5B%22spring%22%2C%22spring%22%5D%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+        "arms": {
+          "cpn_hostedSpring": "treatment"
+        },
+        "steps": [
+          {
+            "kind": "apply",
+            "actionId": "act_spring_title",
+            "versions": ["B"]
+          },
+          {
+            "kind": "apply",
+            "actionId": "act_spring_copy"
+          },
+          {
+            "kind": "apply",
+            "actionId": "act_spring_cta",
+            "versions": ["B"]
+          }
+        ],
+        "decisions": [
+          {
+            "campaignId": "cpn_hostedSpring",
+            "variantId": "var_spring",
+            "layer": "audience",
+            "versionId": "B",
+            "actionIds": ["act_spring_title", "act_spring_copy", "act_spring_cta"]
+          }
+        ],
+        "receipts": [
+          {
+            "actionId": "act_spring_title",
+            "targetId": "e1",
+            "versions": ["B"]
+          },
+          {
+            "actionId": "act_spring_copy",
+            "targetId": "e2"
+          },
+          {
+            "actionId": "act_spring_cta",
+            "targetId": "e3",
+            "versions": ["B"]
+          }
+        ],
+        "text": {
+          "[data-rm-id=\"hero-title\"]": "Spring is for growing your list",
+          "[data-rm-id=\"hero-copy\"]": "The spring playbook for creators.",
+          "[data-rm-id=\"hero-cta\"]": "Get the spring guide"
+        }
+      },
+      {
+        "name": "H3",
+        "url": "https://acme.rightmessage.page/?utm_campaign=spring",
+        "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22EEEEEEEEEEEEEEEEEEEEEE%22%7D",
+        "edge": "bypass:cookie-only",
+        "setCookie": "%7B%22v%22%3A1%2C%22q%22%3A%7B%22utm_campaign%22%3A%5B%22spring%22%2C%22spring%22%5D%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22EEEEEEEEEEEEEEEEEEEEEE%22%7D",
+        "arms": {
+          "cpn_hostedSpring": "holdback"
+        },
+        "steps": [],
+        "decisions": [],
+        "receipts": [],
+        "text": {
+          "[data-rm-id=\"hero-title\"]": "Grow your list",
+          "[data-rm-id=\"hero-copy\"]": "A weekly guide for creators.",
+          "[data-rm-id=\"hero-cta\"]": "Get the guide"
+        },
+        "bodyUnchanged": true
+      },
+      {
+        "name": "H4",
+        "url": "https://acme.rightmessage.page/?utm_campaign=winter",
+        "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%22utm_campaign%22%3A%5B%22winter%22%2C%22winter%22%5D%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22CCCCCCCCCCCCCCCCCCCCCC%22%7D",
+        "edge": "bypass:no-actions",
+        "setCookie": null,
+        "arms": {
+          "cpn_hostedSpring": "treatment"
+        },
+        "steps": [],
+        "decisions": [],
+        "receipts": [],
+        "text": {
+          "[data-rm-id=\"hero-title\"]": "Grow your list",
+          "[data-rm-id=\"hero-copy\"]": "A weekly guide for creators.",
+          "[data-rm-id=\"hero-cta\"]": "Get the guide"
+        },
+        "bodyUnchanged": true
+      },
+      {
+        "name": "H5",
+        "url": "https://acme.rightmessage.page/?utm_campaign=winter",
+        "cookie": "",
+        "edge": "bypass:cookie-only",
+        "mintsUnit": true,
+        "mintedTouch": {
+          "v": 1,
+          "q": {
+            "utm_campaign": ["winter", "winter"]
+          },
+          "r": "",
+          "l": "/"
+        },
+        "steps": [],
+        "decisions": [],
+        "receipts": [],
+        "text": {
+          "[data-rm-id=\"hero-title\"]": "Grow your list",
+          "[data-rm-id=\"hero-copy\"]": "A weekly guide for creators.",
+          "[data-rm-id=\"hero-cta\"]": "Get the guide"
+        },
+        "bodyUnchanged": true
+      },
+      {
+        "name": "H6",
+        "url": "https://acme.rightmessage.page/",
+        "cookie": "__Host-rm_touch=%7B%22v%22%3A1%2C%22q%22%3A%7B%22utm_campaign%22%3A%5B%22spring%22%2C%22spring%22%5D%7D%2C%22r%22%3A%22%22%2C%22u%22%3A%22AAAAAAAAAAAAAAAAAAAAAA%22%7D",
+        "edge": "applied",
+        "setCookie": null,
+        "arms": {
+          "cpn_hostedSpring": "treatment"
+        },
+        "steps": [
+          {
+            "kind": "apply",
+            "actionId": "act_spring_title",
+            "versions": ["B"]
+          },
+          {
+            "kind": "apply",
+            "actionId": "act_spring_copy"
+          },
+          {
+            "kind": "apply",
+            "actionId": "act_spring_cta",
+            "versions": ["B"]
+          }
+        ],
+        "decisions": [
+          {
+            "campaignId": "cpn_hostedSpring",
+            "variantId": "var_spring",
+            "layer": "audience",
+            "versionId": "B",
+            "actionIds": ["act_spring_title", "act_spring_copy", "act_spring_cta"]
+          }
+        ],
+        "receipts": [
+          {
+            "actionId": "act_spring_title",
+            "targetId": "e1",
+            "versions": ["B"]
+          },
+          {
+            "actionId": "act_spring_copy",
+            "targetId": "e2"
+          },
+          {
+            "actionId": "act_spring_cta",
+            "targetId": "e3",
+            "versions": ["B"]
+          }
+        ],
+        "text": {
+          "[data-rm-id=\"hero-title\"]": "Spring is for growing your list",
+          "[data-rm-id=\"hero-copy\"]": "The spring playbook for creators.",
+          "[data-rm-id=\"hero-cta\"]": "Get the spring guide"
+        }
+      }
+    ]
   }
 }
